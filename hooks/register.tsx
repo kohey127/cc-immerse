@@ -318,7 +318,12 @@ async function setAll($: EngineInterface, requestId: string, chunks: readonly Ch
 }
 
 export const register: Register = on => {
-  // The newest reply's chunks, for /learner. A module value: a reload starts it over.
+  // Which messages are the latest reply, for /learner. Module values: a reload starts them over.
+  // A reload, a resize or a scroll draws old messages again, so "drawn lately" is not "latest":
+  // a message belongs to the latest reply when it was first drawn after the latest turn began.
+  const drawn = new Map<string, Chunk[]>() // every message drawn since the load
+  let before = new Set<string>() // those already drawn when the latest turn began
+  let hasTurn = false
   let recent = new Map<string, Chunk[]>()
 
   on('session.start', async ($, e, next) => {
@@ -333,19 +338,25 @@ export const register: Register = on => {
   })
 
   on('turn.start', ($, e, next) => {
+    before = new Set(drawn.keys())
     recent = new Map()
+    hasTurn = true
     return next(e)
   })
 
   on('command.run', { command: 'learner' }, async ($, e) => {
     if (e.args.trim() === 'where') {
       const surfaces = await $.session.surfaces()
-      return { text: `learner: this session draws on: ${surfaces.length ? surfaces.join(', ') : '(nothing)'}`, isTextDisplayOnly: true }
+      return { text: `This session draws on: ${surfaces.length ? surfaces.join(', ') : '(nothing)'}`, isTextDisplayOnly: true }
     }
+    // `off` closes everything on screen (no model call); opening covers the latest reply alone.
     const isOff = e.args.trim() === 'off'
-    const counts = await Promise.all([...recent].map(([requestId, chunks]) => setAll($, requestId, chunks, !isOff)))
+    const targets = isOff ? drawn : recent
+    const counts = await Promise.all([...targets].map(([requestId, chunks]) => setAll($, requestId, chunks, !isOff)))
     const n = counts.reduce((a, b) => a + b, 0)
-    return { text: n === 0 ? 'learner: no English in the latest reply.' : `learner: ${isOff ? 'closed' : 'opened'} ${n} paragraph(s).`, isTextDisplayOnly: true }
+    if (isOff) return { text: 'Closed every translation.', isTextDisplayOnly: true }
+    if (n === 0) return { text: 'No reply to open yet since the plugin loaded. Use ALL JA OPEN at the end of a message.', isTextDisplayOnly: true }
+    return { text: `Opened ${n} block(s) of the latest reply.`, isTextDisplayOnly: true }
   })
 
   // The first question for a typed message: which language is it in?
@@ -460,7 +471,8 @@ export const register: Register = on => {
     if (e.props.isSummary) return next(e)
     const chunks = split(e.props.text)
     if (!chunks.some(c => c.isProse)) return next(e)
-    recent.set(e.requestId, chunks)
+    drawn.set(e.requestId, chunks)
+    if (hasTurn && !before.has(e.requestId)) recent.set(e.requestId, chunks)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
 
     let total = 0
