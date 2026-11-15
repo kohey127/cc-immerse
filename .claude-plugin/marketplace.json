@@ -1,0 +1,14 @@
+{
+  "name": "cc-language-learner",
+  "owner": {
+    "name": "kohey127",
+    "url": "https://github.com/kohey127"
+  },
+  "plugins": [
+    {
+      "name": "cc-language-learner",
+      "source": "./",
+      "description": "Learn English while you work in Claude Code: replies stay in English with the Japanese one click away, Japanese you type is sent as English, and English you type is corrected beside the conversation."
+    }
+  ]
+}

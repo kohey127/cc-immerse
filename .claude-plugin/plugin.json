@@ -1,0 +1,11 @@
+{
+  "name": "cc-language-learner",
+  "version": "0.1.0",
+  "description": "Learn English while you work in Claude Code: replies stay in English with the Japanese one click away, Japanese you type is sent as English, and English you type is corrected beside the conversation.",
+  "types": "./types/index.d.ts",
+  "license": "MIT",
+  "author": {
+    "name": "kohey127",
+    "url": "https://github.com/kohey127"
+  }
+}
