@@ -8,7 +8,9 @@ Translation plugins put your own language next to the English, and then you read
 
 You already spend hours a day reading and writing with Claude Code. This turns those hours into practice, without a separate study session.
 
-> **Status: early.** It works in the Claude Code terminal, for a Japanese speaker learning English. Settings, other language pairs and levels are being built; see [Roadmap](#roadmap).
+> **Status: early.** It works in the Claude Code terminal. It has been used daily for Japanese and English; 22 languages can be chosen in the settings, and the other pairs are covered by tests but not yet by real use. Levels and the finer settings are being built; see [Roadmap](#roadmap).
+
+The examples below use a Japanese speaker learning English, the defaults.
 
 ## What it does
 
@@ -70,11 +72,20 @@ From a shell:
 claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 ```
 
+## Settings
+
+In Claude Code, open `/config` and find **Immerse**.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| Your language | Japanese | Translations and correction notes are written in it. What you type in it is sent in the language you are learning. |
+| Language you are learning | English | Replies in it get a translation on request. What you type in it is corrected. |
+
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `/immerse` | Opens the Japanese for every block of the latest reply |
+| `/immerse` | Opens the translation for every block of the latest reply |
 | `/immerse off` | Closes every open translation |
 | `/immerse where` | Lists the screens the session draws on |
 
@@ -88,14 +99,14 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 ## Limits
 
 - **Terminal only.** In tests, the phone and desktop apps showed nothing. The reason is not known yet.
-- **Japanese and English only**, for now. The language check counts Japanese characters, so it cannot tell apart two languages that share an alphabet.
+- **Pairs that share an alphabet cost one more wait.** Japanese and English are told apart by their letters, at once. Spanish and English are not, so the small model is asked which language a message is in before it is sent.
+- **A message in a third language is left alone**: sent as typed, with no translation and no correction.
 - **Pointing and clicking need a terminal that reports the mouse.** Without it, use `/immerse`.
 - **English paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different, and links inside them cannot be clicked.
 - Built on Claude Code's plugin API for interface mods, which is early access and may change between releases.
 
 ## Roadmap
 
-- Settings for the language pair, with language detection that works for pairs sharing an alphabet.
 - Levels 1, 2, 4 and 5, and the fine-grained settings behind them.
 - A settings panel with a live sample.
 - The plugin counting how often you open the translation, and suggesting the next level.
@@ -109,7 +120,14 @@ claude plugin validate plugin
 claude plugin test plugin
 ```
 
-`plugin/tests/text.test.ts` covers the text logic. `plugin/tests/reply.test.tsx` mounts the plugin's drawing of a reply and presses its marks.
+| File | Covers |
+| --- | --- |
+| `plugin/tests/lang.test.ts` | Which language a text is in, for any pair, and what the small model is asked |
+| `plugin/tests/text.test.ts` | How a reply is cut into blocks and laid out in rows |
+| `plugin/tests/reply.test.tsx` | A reply as drawn: the marks, opening and closing a translation |
+| `plugin/tests/pair.test.tsx` | The language settings, corrections under a typed message, and sessions the plugin leaves alone |
+
+A session with nobody at its prompt (`claude -p`, a scheduled run) is left alone, so a script's own prompt is never rewritten.
 
 ## Prior work
 

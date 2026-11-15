@@ -1,11 +1,73 @@
 {
   "name": "cc-immerse",
-  "version": "0.1.0",
-  "description": "Learn English while you work in Claude Code: replies stay in English with the Japanese one click away, Japanese you type is sent as English, and English you type is corrected beside the conversation.",
+  "version": "0.2.0",
+  "description": "Learn a language while you work in Claude Code: replies stay in the language you are learning with your own one click away, what you type in your own language is sent in that language, and what you type in it is corrected beside the conversation.",
   "types": "./types/index.d.ts",
   "license": "MIT",
   "author": {
     "name": "kohey127",
     "url": "https://github.com/kohey127"
+  },
+  "userConfig": {
+    "nativeLanguage": {
+      "type": "string",
+      "title": "Immerse · Your language",
+      "description": "The language you already read and write. Translations and correction notes are written in it, and what you type in it is sent in the language you are learning.",
+      "default": "Japanese",
+      "options": [
+        "English",
+        "Japanese",
+        "Korean",
+        "Chinese (Simplified)",
+        "Chinese (Traditional)",
+        "Spanish",
+        "French",
+        "German",
+        "Portuguese",
+        "Italian",
+        "Dutch",
+        "Polish",
+        "Turkish",
+        "Vietnamese",
+        "Indonesian",
+        "Russian",
+        "Ukrainian",
+        "Arabic",
+        "Hindi",
+        "Thai",
+        "Greek",
+        "Hebrew"
+      ]
+    },
+    "targetLanguage": {
+      "type": "string",
+      "title": "Immerse · Language you are learning",
+      "description": "The language you work in. Replies in it get a translation on request, and what you type in it is corrected.",
+      "default": "English",
+      "options": [
+        "English",
+        "Japanese",
+        "Korean",
+        "Chinese (Simplified)",
+        "Chinese (Traditional)",
+        "Spanish",
+        "French",
+        "German",
+        "Portuguese",
+        "Italian",
+        "Dutch",
+        "Polish",
+        "Turkish",
+        "Vietnamese",
+        "Indonesian",
+        "Russian",
+        "Ukrainian",
+        "Arabic",
+        "Hindi",
+        "Thai",
+        "Greek",
+        "Hebrew"
+      ]
+    }
   }
 }

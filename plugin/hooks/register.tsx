@@ -1,46 +1,66 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
-import { fixKey, hash, isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, widthOf, wrap } from './text'
-import type { Chunk, Line, Piece } from './text'
+import { fixSystem, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
+import type { Pair } from './lang'
+import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, widthOf, wrap } from './text'
+import type { Chunk, Piece } from './text'
 
 const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
 const TR = { plugin: 'cc-immerse', key: 'tr' } as const
 const SENT = { plugin: 'cc-immerse', key: 'sent' } as const
 const DRAFT = { plugin: 'cc-immerse', key: 'draft' } as const
 
-const SYSTEM =
-  'Translate the text into natural Japanese. Keep code, file paths, commands, URLs and identifiers exactly as written. ' +
-  'Answer with the translation only, as plain text with no Markdown marks.'
+// The pair in force and whether the plugin acts at all. Module values, set as the module registers and as
+// the session starts: a session with nobody at its prompt (`claude -p`, a scheduled run) is left alone,
+// so that a script's own prompt is never rewritten.
+let pair: Pair = pairOf('', '')
+let isActive = true
 
-const SYSTEM_TABLE =
-  'Translate this Markdown into natural Japanese: the cells of its table, and any heading or line around it. Keep the table exactly as it is built: the same rows, ' +
-  'the same columns, the same pipes and the same separator row. Keep code, file paths, commands, URLs and identifiers as written. ' +
-  'Answer with the translated Markdown only.'
+/** The key a translation of `src` is kept under: by native language, so a changed setting translates afresh. */
+function trId(src: string): string {
+  return hash(`${pair.native.code}:${src}`)
+}
 
-const SYSTEM_FIX =
-  'You coach a Japanese speaker who is learning English (CEFR B1). The text is a message they typed to a coding assistant. ' +
-  'Do not answer or act on the message. Write two parts, separated by a line holding only ---.\n' +
-  'Part 1: the message rewritten in natural, correct English, keeping its meaning, its code, paths and commands. ' +
-  'If it is already natural and correct, write exactly: OK\n' +
-  'Part 2: in Japanese, up to three short lines, each starting with "・", saying what was changed and why ' +
-  '(grammar, word choice, nuance). If part 1 is OK, leave part 2 empty.\n' +
-  'Plain text only, no Markdown marks.'
+/** The key a correction of `text` is kept under: apart from its translation, and by pair. */
+function fixId(text: string): string {
+  return fixKey(`${pair.native.code}>${pair.target.code}:${text}`)
+}
 
-const SYSTEM_TO_ENGLISH =
-  'The text is a message a Japanese speaker typed to a coding assistant, in Japanese or in Japanese mixed with English. ' +
-  'Do not answer or act on it. Rewrite the whole message in natural English, as a developer would type it. ' +
-  'Keep code, file paths, commands, URLs, identifiers and @mentions exactly as written, and keep its line breaks. ' +
-  'Answer with the English message only.'
+/** What a correction shows on its first line; null when there is nothing to show. */
+function fixHead(answer: string): string | null {
+  const fix = readFix(answer)
+  if (fix.kind === 'skip') return null
+  return fix.kind === 'ok' ? `✓ Your ${pair.target.name} is perfect!` : fix.corrected
+}
 
-/** The English of a native-language message, or '' when the call gave none. */
-async function toEnglish($: EngineInterface, text: string): Promise<string> {
+/** One short call to the small model: its answer, or '' when it gave none. */
+async function ask($: EngineInterface, system: string, prompt: string): Promise<string> {
   try {
-    const r = await $.model.complete({ model: 'haiku', system: SYSTEM_TO_ENGLISH, prompt: text, maxTokens: 2000, effort: 'low', timeoutMs: 20000 })
+    const r = await $.model.complete({ model: 'haiku', system, prompt, maxTokens: 2000, effort: 'low', timeoutMs: 20000 })
     return r.isAnswered ? r.text.trim() : ''
   } catch {
     return ''
   }
+}
+
+/**
+ * A typed message as it is to be sent, where the plugin has work to do on it before it goes.
+ *
+ * `target`: the message in the learned language, sent in its place. `asTyped`: it is sent as typed (its
+ * correction, when it has one, is kept for the row under it). `failed`: a native-language message the
+ * model gave no version of.
+ */
+async function prepare($: EngineInterface, text: string, language: 'native' | 'unsure'): Promise<{ target: string } | 'asTyped' | 'failed'> {
+  if (language === 'native') {
+    const target = await ask($, toTargetSystem(pair), text)
+    return target === '' ? 'failed' : { target }
+  }
+  // The pair shares its letters: one call says which language it is and does that language's work.
+  const judged = readJudgement(await ask($, judgeSystem(pair), text))
+  if (judged.kind === 'native') return { target: judged.target }
+  if (judged.kind === 'target') await $.state.set({ ...TR, id: fixId(text) }, { status: 'done', text: judged.fix })
+  return 'asTyped'
 }
 
 // The live preview. Module values: a reload starts them over, and the next keystroke fills them again.
@@ -57,42 +77,52 @@ async function noteDraft($: EngineInterface, draft: string): Promise<void> {
   isPreviewDue = true
 }
 
-/** The worker's tick: previews a native-language draft that has rested; clears the preview of any other. */
+/** The worker's tick: previews a draft that has rested, in whichever of the pair's languages it is; clears the preview of any other. */
 async function previewTick($: EngineInterface): Promise<void> {
   if (!isPreviewDue || isPreviewRunning) return
   if ((await $.clock.now()) - draftChangedAt < PREVIEW_DELAY_MS) return
   isPreviewDue = false
   const draft = latestDraft
   const kept = (await $.state.get(DRAFT)).value ?? null
-  const language = languageOf(draft)
+  const language = isActive ? languageOf(draft, pair) : 'other'
   if (language === 'other') {
     if (kept) await $.state.set(DRAFT, null)
     return
   }
   if (kept?.src === draft && kept.status === 'done') return
-  const label = language === 'native' ? 'EN' : 'FIX'
   isPreviewRunning = true
   try {
-    await $.state.set(DRAFT, { src: draft, english: kept?.label === label ? kept.english : '', status: 'pending', label })
-    let english = ''
-    if (language === 'native') english = await toEnglish($, draft)
-    else {
+    // `sends`: Enter sends the line's text in place of the draft. A correction is shown, never sent.
+    let sends = language === 'native'
+    let label = sends ? pair.target.tag : language === 'learning' ? 'FIX' : ''
+    await $.state.set(DRAFT, { src: draft, english: kept?.label === label ? kept.english : '', status: 'pending', label, sends })
+    let shown: string | null = null
+    if (language === 'learning') {
       // The same call the sent message's `↳` line reads: made once, here, and kept.
-      await translate($, draft, fixKey(draft), SYSTEM_FIX)
-      const fix = (await $.state.get({ ...TR, id: fixKey(draft) })).value
-      const corrected = fix?.status === 'done' ? (fix.text.split(/^\s*---\s*$/m)[0] ?? '').trim() : ''
-      english = corrected === 'OK' ? '✓ Your English is perfect!' : corrected
+      await translate($, draft, fixId(draft), fixSystem(pair))
+      const fix = (await $.state.get({ ...TR, id: fixId(draft) })).value
+      shown = fix?.status === 'done' ? fixHead(fix.text) : null
+    } else {
+      const prepared = await prepare($, draft, language)
+      if (typeof prepared === 'object') {
+        sends = true
+        label = pair.target.tag
+        shown = prepared.target
+      } else if (prepared === 'asTyped') {
+        label = 'FIX'
+        const fix = (await $.state.get({ ...TR, id: fixId(draft) })).value
+        shown = fix?.status === 'done' ? fixHead(fix.text) : null
+      }
     }
     if (latestDraft !== draft) return // typed on meanwhile: the next tick previews the newer draft
-    const next: Draft = english ? { src: draft, english, status: 'done', label } : { src: draft, english: '', status: 'failed', label }
-    await $.state.set(DRAFT, next)
+    await $.state.set(DRAFT, shown ? { src: draft, english: shown, status: 'done', label, sends } : null)
   } finally {
     isPreviewRunning = false
   }
 }
 
 /** One model call whose answer is kept under `id`: a translation of `src`, or with `system`, what that asks of it. */
-async function translate($: EngineInterface, src: string, id: string = hash(src), system?: string): Promise<void> {
+async function translate($: EngineInterface, src: string, id: string = trId(src), system?: string): Promise<void> {
   const ref = { ...TR, id }
   const kept = (await $.state.get(ref)).value
   const now = await $.clock.now()
@@ -102,7 +132,7 @@ async function translate($: EngineInterface, src: string, id: string = hash(src)
   await $.state.set(ref, { status: 'pending', text: '', at: now })
   let next: Tr
   try {
-    const r = await $.model.complete({ model: 'haiku', system: system ?? (isTable(src) ? SYSTEM_TABLE : SYSTEM), prompt: src, maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
+    const r = await $.model.complete({ model: 'haiku', system: system ?? (isTable(src) ? tableSystem(pair) : translateSystem(pair)), prompt: src, maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
     next = r.isAnswered ? { status: 'done', text: r.text.trim() } : { status: 'error', text: r.reason }
   } catch (err) {
     next = { status: 'error', text: (err instanceof Error ? err.message : String(err)).slice(0, 80) }
@@ -113,7 +143,7 @@ async function translate($: EngineInterface, src: string, id: string = hash(src)
 /** One thing a press opens: a whole chunk (a paragraph, a list, a heading with its paragraph, a table). */
 type Unit = { k: number; text: string }
 
-/** What a chunk offers to open: itself, when it is English. `inText`: its own text is the button. */
+/** What a chunk offers to open: itself, when it is in the learned language. `inText`: the plugin draws its text. */
 function offers(c: Chunk): (Unit & { inText: boolean })[] {
   if (!c.isProse) return []
   const hasCode = /^\s*(```|~~~)/m.test(c.src)
@@ -141,7 +171,9 @@ async function setAll($: EngineInterface, requestId: string, chunks: readonly Ch
   return work.length
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  pair = pairOf(String(options.nativeLanguage ?? ''), String(options.targetLanguage ?? ''))
+
   // Which messages are the latest reply, for /immerse. Module values: a reload starts them over.
   // A reload, a resize or a scroll draws old messages again, so "drawn lately" is not "latest":
   // a message belongs to the latest reply when it was first drawn after the latest turn began.
@@ -151,8 +183,10 @@ export const register: Register = on => {
   let recent = new Map<string, Chunk[]>()
 
   on('session.start', async ($, e, next) => {
+    isActive = e.isInteractive
+    if (!isActive) return next(e)
     $.clock.every(250, () => void previewTick($))
-    await $.command.register({ name: 'immerse', description: 'Open the Japanese of the latest reply (/immerse off closes it, /immerse where lists the screens)' })
+    await $.command.register({ name: 'immerse', description: 'Open the translation of the latest reply (/immerse off closes it, /immerse where lists the screens)' })
     return next(e)
   })
 
@@ -179,32 +213,35 @@ export const register: Register = on => {
     const counts = await Promise.all([...targets].map(([requestId, chunks]) => setAll($, requestId, chunks, !isOff)))
     const n = counts.reduce((a, b) => a + b, 0)
     if (isOff) return { text: 'Closed every translation.', isTextDisplayOnly: true }
-    if (n === 0) return { text: 'No reply to open yet since the plugin loaded. Use ALL JA OPEN at the end of a message.', isTextDisplayOnly: true }
+    if (n === 0) return { text: `No reply to open yet since the plugin loaded. Use ALL ${pair.native.tag} OPEN at the end of a message.`, isTextDisplayOnly: true }
     return { text: `Opened ${n} block(s) of the latest reply.`, isTextDisplayOnly: true }
   })
 
   // The first question for a typed message: which language is it in?
-  //   native (or mixed)  -> it is sent in English; the transcript keeps what was typed, the English under it
+  //   native (or mixed)  -> it is sent in the learned language; the transcript keeps what was typed, that under it
   //   learning           -> it is sent as typed and corrected beside the conversation: the model never sees that
+  //   unsure             -> the pair shares its letters: the model says which of the two it is
+  //   other              -> it is sent as typed and nothing is done (a third language, code, a word or two)
   on('prompt.submit', async ($, e, next) => {
     const text = e.text
-    if (e.command || e.isMeta) return next(e)
-    const language = languageOf(text)
+    if (!isActive || e.command || e.isMeta) return next(e)
+    const language = languageOf(text, pair)
+    if (language === 'other') return next(e)
     if (language === 'learning') {
-      $.clock.after(0, () => void translate($, text, fixKey(text), SYSTEM_FIX))
+      $.clock.after(0, () => void translate($, text, fixId(text), fixSystem(pair)))
       return next(e)
     }
-    if (language !== 'native') return next(e)
 
-    // The preview already holds this draft's English: Enter sends it with no wait.
+    // The preview already did this draft's work: Enter sends with no wait.
     const draft = (await $.state.get(DRAFT)).value
-    const english = draft?.status === 'done' && draft.label === 'EN' && draft.src === text ? draft.english : await toEnglish($, text)
-    if (english === '') {
-      $.ui.toast('immerse: could not make the English version; sent as typed')
+    const prepared = draft?.status === 'done' && draft.src === text ? (draft.sends ? { target: draft.english } : 'asTyped') : await prepare($, text, language)
+    if (prepared === 'asTyped') return next(e)
+    if (prepared === 'failed') {
+      $.ui.toast(`immerse: could not make the ${pair.target.name} version; sent as typed`)
       return next(e)
     }
-    await $.state.set({ ...SENT, id: hash(english) }, text)
-    return next({ ...e, text: english })
+    await $.state.set({ ...SENT, id: hash(prepared.target) }, text)
+    return next({ ...e, text: prepared.target })
   })
 
   // While the person types, above the prompt box: a native-language draft's English (what Enter will send),
@@ -227,7 +264,7 @@ export const register: Register = on => {
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box flexDirection="row">
-        <Text dimColor>{draft.label} ▸ </Text>
+        <Text dimColor>{draft.label === '' ? '▸ ' : `${draft.label} ▸ `}</Text>
         <Box flexShrink={1}>
           <Text dimColor={draft.status !== 'done'}>{draft.english === '' ? '…' : draft.english}</Text>
         </Box>
@@ -240,7 +277,7 @@ export const register: Register = on => {
   //   learning -> `↳` the corrected sentence, then the notes
   on('ui.render', { component: 'UserMessage' }, async ($, e, next) => {
     const text = e.props.text
-    if (e.props.origin.kind !== 'composer') return next(e)
+    if (!isActive || e.props.origin.kind !== 'composer') return next(e)
     const typed = (await $.state.get({ ...SENT, id: hash(text.trim()) })).value
     const { Box, Text } = $.ui.resolve(e)
 
@@ -260,17 +297,18 @@ export const register: Register = on => {
     }
 
     const row = await next(e)
-    if (!isFixable(text)) return row
-    const fix = (await $.state.get({ ...TR, id: fixKey(text) })).value
+    const fix = (await $.state.get({ ...TR, id: fixId(text) })).value
     if (!fix) return row
 
     let head = '…'
     let points: string[] = []
-    if (fix.status === 'error') head = `(添削できませんでした: ${fix.text})`
+    if (fix.status === 'error') head = `✗ ${fix.text}`
     else if (fix.status === 'done') {
-      const [corrected = '', notes = ''] = fix.text.split(/^\s*---\s*$/m)
-      head = corrected.trim() === 'OK' ? '✓ Your English is perfect!' : corrected.trim()
-      points = notes.split('\n').map(l => l.trim()).filter(l => l !== '')
+      const shown = fixHead(fix.text)
+      if (shown === null) return row // not in the learned language after all: nothing to show
+      const read = readFix(fix.text)
+      head = shown
+      points = read.kind === 'fixed' ? read.notes : []
     }
 
     return (
@@ -292,8 +330,8 @@ export const register: Register = on => {
   })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    if (e.props.isSummary) return next(e)
-    const chunks = split(e.props.text)
+    if (!isActive || e.props.isSummary) return next(e)
+    const chunks = split(e.props.text, pair)
     if (!chunks.some(c => c.isProse)) return next(e)
     drawn.set(e.requestId, chunks)
     if (hasTurn && !before.has(e.requestId)) recent.set(e.requestId, chunks)
@@ -308,8 +346,8 @@ export const register: Register = on => {
         const bodies = await Promise.all(
           units.map(async (u, n) => {
             if (!opens[n]) return null
-            const tr = (await $.state.get({ ...TR, id: hash(u.text) })).value
-            return !tr || tr.status === 'pending' ? '訳しています…' : tr.status === 'error' ? `訳せませんでした（${tr.text}）` : tr.text
+            const tr = (await $.state.get({ ...TR, id: trId(u.text) })).value
+            return !tr || tr.status === 'pending' ? '…' : tr.status === 'error' ? `✗ ${tr.text}` : tr.text
           }),
         )
         total += units.length
@@ -317,7 +355,7 @@ export const register: Register = on => {
 
         const u = units[0]
         const rowId = `${e.requestId}:${i}:0`
-        const tr = u && opens[0] ? (await $.state.get({ ...TR, id: hash(u.text) })).value : null
+        const tr = u && opens[0] ? (await $.state.get({ ...TR, id: trId(u.text) })).value : null
         const translation = !u || !opens[0] ? null : c.isTable && tr?.status === 'done' ? (
           <Markdown text={tr.text} dimColor />
         ) : (
@@ -427,8 +465,8 @@ export const register: Register = on => {
         {rows}
         {total >= 2 && (
           <Box flexDirection="row" gap={2} paddingLeft={2} marginTop={1}>
-            {openTotal < total && <Button key="all-open" plain dimColor label="▸▸ ALL JA OPEN" onPress={() => setAll($, e.requestId, chunks, true)} />}
-            {openTotal > 0 && <Button key="all-close" plain dimColor label="▾▾ ALL JA CLOSE" onPress={() => setAll($, e.requestId, chunks, false)} />}
+            {openTotal < total && <Button key="all-open" plain dimColor label={`▸▸ ALL ${pair.native.tag} OPEN`} onPress={() => setAll($, e.requestId, chunks, true)} />}
+            {openTotal > 0 && <Button key="all-close" plain dimColor label={`▾▾ ALL ${pair.native.tag} CLOSE`} onPress={() => setAll($, e.requestId, chunks, false)} />}
           </Box>
         )}
       </Box>

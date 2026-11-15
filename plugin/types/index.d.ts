@@ -3,10 +3,12 @@
 export type Tr = { status: 'pending' | 'done' | 'error'; text: string; at?: number }
 
 /**
- * The line above the prompt box, made while the person types. `EN`: the English of a native-language draft,
- * which Enter sends. `FIX`: a learned-language draft as it would read corrected; the draft is sent as typed.
+ * The line above the prompt box, made while the person types. `label` names what it is: the learned
+ * language's tag for a native-language draft in that language, `FIX` for a learned-language draft as it
+ * would read corrected, empty while a pair that shares its letters is still being told apart.
+ * `sends`: Enter sends `english` in place of the draft; a correction is shown and never sent.
  */
-export type Draft = { src: string; english: string; status: 'pending' | 'done' | 'failed'; label: 'EN' | 'FIX' }
+export type Draft = { src: string; english: string; status: 'pending' | 'done' | 'failed'; label: string; sends: boolean }
 
 declare module 'claude-code' {
   interface PluginState {

@@ -1,7 +1,10 @@
 // The plugin's text logic: which language a text is in, how a reply is cut into chunks, how a chunk is
 // laid out in rows. Pure functions: no `$`, nothing drawn, so they are tested by themselves (tests/text.test.ts).
 
-/** `isProse`: English worth a translation. `isTable`: that English is a Markdown table, translated and drawn as one. */
+import { classify, isTargetText } from './lang'
+import type { Pair } from './lang'
+
+/** `isProse`: text in the learned language, worth a translation. `isTable`: it is a Markdown table, translated and drawn as one. */
 export type Chunk = { src: string; isProse: boolean; isTable: boolean }
 
 export function isTable(src: string): boolean {
@@ -14,17 +17,14 @@ export function hash(text: string): string {
   return (h >>> 0).toString(36) + text.length.toString(36)
 }
 
-/** English prose worth a translation: not code, not a table, not already Japanese. */
-export function isProse(src: string): boolean {
+/** Prose in the learned language, worth a translation: not code, not a rule, not already in the native language. */
+export function isProse(src: string, pair: Pair): boolean {
   if (/^\s*(```|~~~)/.test(src) || /^\s*([-*_]\s*){3,}$/.test(src)) return false
-  const plain = src.replace(/`[^`]*`/g, '').replace(/https?:\/\/\S+/g, '')
-  const latin = (plain.match(/[A-Za-z]/g) ?? []).length
-  const cjk = (plain.match(/[぀-ヿ一-鿿]/g) ?? []).length
-  return latin >= 4 && cjk < latin * 0.2
+  return isTargetText(src, pair)
 }
 
 /** Blocks separated by blank lines; a fenced block stays whole, a heading joins the block after it. */
-export function split(text: string): Chunk[] {
+export function split(text: string, pair: Pair): Chunk[] {
   const blocks: string[] = []
   let cur: string[] = []
   let fence: string | null = null
@@ -59,17 +59,30 @@ export function split(text: string): Chunk[] {
       i++
     } else merged.push(block)
   }
-  return merged.map(src => ({ src, isProse: isProse(src), isTable: isTable(src) }))
+  return merged.map(src => ({ src, isProse: isProse(src, pair), isTable: isTable(src) }))
 }
 
-/** Which language a typed message is in: the native one (or a mix: both are sent in English), the learned one, or neither. */
-export function languageOf(text: string): 'native' | 'learning' | 'other' {
+/** How many letters a typed message has outside its code spans: a word or two is not judged. */
+function lettersOf(text: string): number {
+  return (text.replace(/`[^`]*`/g, '').match(/\p{L}/gu) ?? []).length
+}
+
+/**
+ * What the plugin does with a typed message.
+ *
+ * `native`: it is in the person's own language (or a mix) and is sent in the learned one.
+ * `learning`: it is in the learned language and is corrected. `unsure`: the pair shares its letters, so the
+ * model is asked which of those it is. `other`: it is left alone (a command, a word or two, a third
+ * language, code, or a paste too long to be a message).
+ */
+export function languageOf(text: string, pair: Pair): 'native' | 'learning' | 'unsure' | 'other' {
   const t = text.trim()
   if (t === '' || t.startsWith('/') || t.length > 2000) return 'other'
-  const plain = t.replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '').replace(/https?:\/\/\S+/g, '')
-  const cjk = (plain.match(/[\u3040-\u30ff\u4e00-\u9fff]/g) ?? []).length
-  if (cjk >= 2) return 'native'
-  return isFixable(t) ? 'learning' : 'other'
+  const kind = classify(t, pair)
+  if (kind === 'native') return 'native'
+  if (kind === 'other') return 'other'
+  if (lettersOf(t) < 12 || t.length > 1500) return 'other'
+  return kind === 'target' ? 'learning' : 'unsure'
 }
 
 /** The key a correction of `text` is kept under: apart from its translation. */
@@ -77,12 +90,9 @@ export function fixKey(text: string): string {
   return hash('fix:' + text)
 }
 
-/** Whether a typed message is English prose worth a correction: not a command, not mostly Japanese, not huge. */
-export function isFixable(text: string): boolean {
-  const t = text.trim()
-  // A draft of a word or two is not judged: at least twelve letters.
-  const letters = (t.replace(/`[^`]*`/g, '').match(/[A-Za-z]/g) ?? []).length
-  return letters >= 12 && t.length <= 1500 && !t.startsWith('/') && isProse(t)
+/** Whether a typed message is in the learned language and long enough to correct. */
+export function isFixable(text: string, pair: Pair): boolean {
+  return languageOf(text, pair) === 'learning'
 }
 
 /** One drawn line of a prose chunk: what leads it (a bullet, a number, a quote bar) and its text. */
