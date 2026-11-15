@@ -1,4 +1,4 @@
-# cc-language-learner
+# cc-immerse
 
 Learn English while you work in Claude Code.
 
@@ -32,22 +32,22 @@ The corrections are made beside the conversation by a small model. Claude never 
 In a Claude Code terminal session:
 
 ```
-/plugin install cc-language-learner --marketplace kohey127/cc-language-learner
+/plugin install cc-immerse --marketplace kohey127/cc-immerse
 ```
 
 From a shell:
 
 ```sh
-claude plugin install cc-language-learner --marketplace kohey127/cc-language-learner
+claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 ```
 
 ## Commands
 
 | Command | What it does |
 | --- | --- |
-| `/learner` | Opens the Japanese for every block of the latest reply |
-| `/learner off` | Closes it |
-| `/learner where` | Lists the screens the session draws on |
+| `/immerse` | Opens the Japanese for every block of the latest reply |
+| `/immerse off` | Closes it |
+| `/immerse where` | Lists the screens the session draws on |
 
 ## What it costs
 
@@ -60,7 +60,7 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 
 - **Terminal only.** In tests, the phone and desktop apps showed nothing. The reason is not known yet.
 - **Japanese and English only**, for now. The language check counts Japanese characters, so it cannot tell two languages apart that share an alphabet.
-- **Clicks need a terminal that reports the mouse** (Claude Code's fullscreen rendering). Without it, use `/learner`.
+- **Clicks need a terminal that reports the mouse** (Claude Code's fullscreen rendering). Without it, use `/immerse`.
 - **English paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different, and links inside them cannot be clicked.
 - Built on Claude Code's plugin API for interface mods, which is early access and may change between releases.
 

@@ -10,7 +10,7 @@ export type Draft = { src: string; english: string; status: 'pending' | 'done' |
 
 declare module 'claude-code' {
   interface PluginState {
-    'cc-language-learner': {
+    'cc-immerse': {
       /** Whether a paragraph's translation is open, by `requestId:index`. */
       open: StateFamily<boolean>
       /** Translations, by a hash of the paragraph. */

@@ -2,10 +2,10 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
 
-const OPEN = { plugin: 'cc-language-learner', key: 'open' } as const
-const TR = { plugin: 'cc-language-learner', key: 'tr' } as const
-const SENT = { plugin: 'cc-language-learner', key: 'sent' } as const
-const DRAFT = { plugin: 'cc-language-learner', key: 'draft' } as const
+const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
+const TR = { plugin: 'cc-immerse', key: 'tr' } as const
+const SENT = { plugin: 'cc-immerse', key: 'sent' } as const
+const DRAFT = { plugin: 'cc-immerse', key: 'draft' } as const
 
 const SYSTEM =
   'Translate the text into natural Japanese. Keep code, file paths, commands, URLs and identifiers exactly as written. ' +
@@ -318,7 +318,7 @@ async function setAll($: EngineInterface, requestId: string, chunks: readonly Ch
 }
 
 export const register: Register = on => {
-  // Which messages are the latest reply, for /learner. Module values: a reload starts them over.
+  // Which messages are the latest reply, for /immerse. Module values: a reload starts them over.
   // A reload, a resize or a scroll draws old messages again, so "drawn lately" is not "latest":
   // a message belongs to the latest reply when it was first drawn after the latest turn began.
   const drawn = new Map<string, Chunk[]>() // every message drawn since the load
@@ -328,12 +328,12 @@ export const register: Register = on => {
 
   on('session.start', async ($, e, next) => {
     $.clock.every(250, () => void previewTick($))
-    await $.command.register({ name: 'learner', description: 'Open the Japanese of the latest reply (/learner off closes it, /learner where lists the screens)' })
+    await $.command.register({ name: 'immerse', description: 'Open the Japanese of the latest reply (/immerse off closes it, /immerse where lists the screens)' })
     return next(e)
   })
 
   on('session.attach', ($, e, next) => {
-    $.ui.toast(`learner: a ${e.surface} screen joined`)
+    $.ui.toast(`immerse: a ${e.surface} screen joined`)
     return next(e)
   })
 
@@ -344,7 +344,7 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'learner' }, async ($, e) => {
+  on('command.run', { command: 'immerse' }, async ($, e) => {
     if (e.args.trim() === 'where') {
       const surfaces = await $.session.surfaces()
       return { text: `This session draws on: ${surfaces.length ? surfaces.join(', ') : '(nothing)'}`, isTextDisplayOnly: true }
@@ -376,7 +376,7 @@ export const register: Register = on => {
     const draft = (await $.state.get(DRAFT)).value
     const english = draft?.status === 'done' && draft.label === 'EN' && draft.src === text ? draft.english : await toEnglish($, text)
     if (english === '') {
-      $.ui.toast('learner: could not make the English version; sent as typed')
+      $.ui.toast('immerse: could not make the English version; sent as typed')
       return next(e)
     }
     await $.state.set({ ...SENT, id: hash(english) }, text)
