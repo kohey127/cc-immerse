@@ -50,24 +50,26 @@ async function ask($: EngineInterface, system: string, prompt: string): Promise<
 /**
  * A typed message as it is to be sent, where the plugin has work to do on it before it goes.
  *
- * `target`: the message in the learned language, sent in its place. `asTyped`: it is sent as typed (its
- * correction, when it has one, is kept for the row under it). `failed`: a native-language message the
- * model gave no version of.
+ * `target`: the message in the learned language. `asTyped`: there is no such version, and it is sent as
+ * typed (its correction, when it has one, is kept for the row under it). `failed`: a native-language
+ * message the model gave no version of. Whether a `target` is sent or only shown is the setting's to say.
  */
 async function prepare($: EngineInterface, text: string, language: 'native' | 'unsure'): Promise<{ target: string } | 'asTyped' | 'failed'> {
   if (language === 'native') {
+    if (settings.send === 'off') return 'asTyped'
     const target = await ask($, toTargetSystem(pair), text)
     return target === '' ? 'failed' : { target }
   }
   // The pair shares its letters: one call says which language it is and does that language's work.
+  // With neither kind of work switched on, there is nothing to ask.
+  if (settings.send === 'off' && settings.correct === 'off') return 'asTyped'
   const judged = readJudgement(await ask($, judgeSystem(pair), text))
-  if (judged.kind === 'native') return { target: judged.target }
-  if (judged.kind === 'target') await $.state.set({ ...TR, id: fixId(text) }, { status: 'done', text: judged.fix })
+  if (judged.kind === 'native' && settings.send !== 'off') return { target: judged.target }
+  if (judged.kind === 'target' && settings.correct !== 'off') await $.state.set({ ...TR, id: fixId(text) }, { status: 'done', text: judged.fix })
   return 'asTyped'
 }
 
 // The live preview. Module values: a reload starts them over, and the next keystroke fills them again.
-const PREVIEW_DELAY_MS = 600
 let latestDraft = ''
 let draftChangedAt = 0
 let isPreviewDue = false
@@ -83,11 +85,14 @@ async function noteDraft($: EngineInterface, draft: string): Promise<void> {
 /** The worker's tick: previews a draft that has rested, in whichever of the pair's languages it is; clears the preview of any other. */
 async function previewTick($: EngineInterface): Promise<void> {
   if (!isPreviewDue || isPreviewRunning) return
-  if ((await $.clock.now()) - draftChangedAt < PREVIEW_DELAY_MS) return
+  if ((await $.clock.now()) - draftChangedAt < settings.previewDelayMs) return
   isPreviewDue = false
   const draft = latestDraft
   const kept = (await $.state.get(DRAFT)).value ?? null
-  const language = isActive ? languageOf(draft, pair) : 'other'
+  let language = isActive && settings.hasPreview ? languageOf(draft, pair) : 'other'
+  // A correction while typing is its own setting; a native-language draft left alone has nothing to preview.
+  if (language === 'learning' && settings.correct !== 'both') language = 'other'
+  if (language === 'native' && settings.send === 'off') language = 'other'
   if (language === 'other') {
     if (kept) await $.state.set(DRAFT, null)
     return
@@ -96,7 +101,7 @@ async function previewTick($: EngineInterface): Promise<void> {
   isPreviewRunning = true
   try {
     // `sends`: Enter sends the line's text in place of the draft. A correction is shown, never sent.
-    let sends = language === 'native'
+    let sends = language === 'native' && settings.send === 'target'
     let label = sends ? pair.target.tag : language === 'learning' ? 'FIX' : ''
     await $.state.set(DRAFT, { src: draft, english: kept?.label === label ? kept.english : '', status: 'pending', label, sends })
     let shown: string | null = null
@@ -108,7 +113,7 @@ async function previewTick($: EngineInterface): Promise<void> {
     } else {
       const prepared = await prepare($, draft, language)
       if (typeof prepared === 'object') {
-        sends = true
+        sends = settings.send === 'target'
         label = pair.target.tag
         shown = prepared.target
       } else if (prepared === 'asTyped') {
@@ -232,14 +237,16 @@ export const register: Register = (on, options) => {
     const language = languageOf(text, pair)
     if (language === 'other') return next(e)
     if (language === 'learning') {
-      $.clock.after(0, () => void translate($, text, fixId(text), fixSystem(pair)))
+      if (settings.correct !== 'off') $.clock.after(0, () => void translate($, text, fixId(text), fixSystem(pair)))
       return next(e)
     }
+    // Shown but not sent: the preview is all there is, and the message goes as typed.
+    if (language === 'native' && settings.send !== 'target') return next(e)
 
     // The preview already did this draft's work: Enter sends with no wait.
     const draft = (await $.state.get(DRAFT)).value
     const prepared = draft?.status === 'done' && draft.src === text ? (draft.sends ? { target: draft.english } : 'asTyped') : await prepare($, text, language)
-    if (prepared === 'asTyped') return next(e)
+    if (prepared === 'asTyped' || settings.send !== 'target') return next(e)
     if (prepared === 'failed') {
       $.ui.toast(`immerse: could not make the ${pair.target.name} version; sent as typed`)
       return next(e)
