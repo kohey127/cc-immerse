@@ -1,6 +1,8 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
+import { fixKey, hash, isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, widthOf, wrap } from './text'
+import type { Chunk, Line, Piece } from './text'
 
 const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
 const TR = { plugin: 'cc-immerse', key: 'tr' } as const
@@ -16,67 +18,6 @@ const SYSTEM_TABLE =
   'the same columns, the same pipes and the same separator row. Keep code, file paths, commands, URLs and identifiers as written. ' +
   'Answer with the translated Markdown only.'
 
-/** `isProse`: English worth a translation. `isTable`: that English is a Markdown table, translated and drawn as one. */
-type Chunk = { src: string; isProse: boolean; isTable: boolean }
-
-function isTable(src: string): boolean {
-  return /^\s*\|.*\|\s*$/m.test(src)
-}
-
-function hash(text: string): string {
-  let h = 5381
-  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
-  return (h >>> 0).toString(36) + text.length.toString(36)
-}
-
-/** English prose worth a translation: not code, not a table, not already Japanese. */
-function isProse(src: string): boolean {
-  if (/^\s*(```|~~~)/.test(src) || /^\s*([-*_]\s*){3,}$/.test(src)) return false
-  const plain = src.replace(/`[^`]*`/g, '').replace(/https?:\/\/\S+/g, '')
-  const latin = (plain.match(/[A-Za-z]/g) ?? []).length
-  const cjk = (plain.match(/[぀-ヿ一-鿿]/g) ?? []).length
-  return latin >= 4 && cjk < latin * 0.2
-}
-
-/** Blocks separated by blank lines; a fenced block stays whole, a heading joins the block after it. */
-function split(text: string): Chunk[] {
-  const blocks: string[] = []
-  let cur: string[] = []
-  let fence: string | null = null
-  for (const line of text.split('\n')) {
-    const mark = /^\s*(```+|~~~+)/.exec(line)?.[1]
-    if (fence) {
-      cur.push(line)
-      if (mark && mark.charAt(0) === fence.charAt(0) && mark.length >= fence.length) fence = null
-      continue
-    }
-    if (mark) {
-      fence = mark
-      cur.push(line)
-      continue
-    }
-    if (line.trim() === '') {
-      if (cur.length) blocks.push(cur.join('\n'))
-      cur = []
-      continue
-    }
-    cur.push(line)
-  }
-  if (cur.length) blocks.push(cur.join('\n'))
-
-  const merged: string[] = []
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i] ?? ''
-    const after = blocks[i + 1]
-    const isHeadingAlone = /^\s*#{1,6}\s/.test(block) && !block.includes('\n')
-    if (isHeadingAlone && after !== undefined) {
-      merged.push(block + '\n\n' + after)
-      i++
-    } else merged.push(block)
-  }
-  return merged.map(src => ({ src, isProse: isProse(src), isTable: isTable(src) }))
-}
-
 const SYSTEM_FIX =
   'You coach a Japanese speaker who is learning English (CEFR B1). The text is a message they typed to a coding assistant. ' +
   'Do not answer or act on the message. Write two parts, separated by a line holding only ---.\n' +
@@ -91,16 +32,6 @@ const SYSTEM_TO_ENGLISH =
   'Do not answer or act on it. Rewrite the whole message in natural English, as a developer would type it. ' +
   'Keep code, file paths, commands, URLs, identifiers and @mentions exactly as written, and keep its line breaks. ' +
   'Answer with the English message only.'
-
-/** Which language a typed message is in: the native one (or a mix: both are sent in English), the learned one, or neither. */
-function languageOf(text: string): 'native' | 'learning' | 'other' {
-  const t = text.trim()
-  if (t === '' || t.startsWith('/') || t.length > 2000) return 'other'
-  const plain = t.replace(/```[\s\S]*?```/g, '').replace(/`[^`]*`/g, '').replace(/https?:\/\/\S+/g, '')
-  const cjk = (plain.match(/[\u3040-\u30ff\u4e00-\u9fff]/g) ?? []).length
-  if (cjk >= 2) return 'native'
-  return isFixable(t) ? 'learning' : 'other'
-}
 
 /** The English of a native-language message, or '' when the call gave none. */
 async function toEnglish($: EngineInterface, text: string): Promise<string> {
@@ -160,19 +91,6 @@ async function previewTick($: EngineInterface): Promise<void> {
   }
 }
 
-/** The key a correction of `text` is kept under: apart from its translation. */
-function fixKey(text: string): string {
-  return hash('fix:' + text)
-}
-
-/** Whether a typed message is English prose worth a correction: not a command, not mostly Japanese, not huge. */
-function isFixable(text: string): boolean {
-  const t = text.trim()
-  // A draft of a word or two is not judged: at least twelve letters.
-  const letters = (t.replace(/`[^`]*`/g, '').match(/[A-Za-z]/g) ?? []).length
-  return letters >= 12 && t.length <= 1500 && !t.startsWith('/') && isProse(t)
-}
-
 /** One model call whose answer is kept under `id`: a translation of `src`, or with `system`, what that asks of it. */
 async function translate($: EngineInterface, src: string, id: string = hash(src), system?: string): Promise<void> {
   const ref = { ...TR, id }
@@ -194,100 +112,6 @@ async function translate($: EngineInterface, src: string, id: string = hash(src)
 
 /** One thing a press opens: a whole chunk (a paragraph, a list, a heading with its paragraph, a table). */
 type Unit = { k: number; text: string }
-
-/** One drawn line of a prose chunk: what leads it (a bullet, a number, a quote bar) and its text. */
-type Line = { lead: string; text: string; isHeading: boolean; isGap: boolean }
-
-/** A prose chunk as lines: a paragraph's lines joined, each list item, heading or quote on its own. */
-function linesOf(src: string): Line[] {
-  const out: Line[] = []
-  let isOpen = false // the last line takes a continuation
-  for (const raw of src.split('\n')) {
-    if (raw.trim() === '') {
-      if (out.length) out.push({ lead: '', text: '', isHeading: false, isGap: true })
-      isOpen = false
-      continue
-    }
-    const heading = /^\s*#{1,6}\s+(.*)$/.exec(raw)
-    const item = /^(\s*)([-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?(.*)$/.exec(raw)
-    const quote = /^\s*>\s?(.*)$/.exec(raw)
-    if (heading) {
-      out.push({ lead: '', text: heading[1] ?? '', isHeading: true, isGap: false })
-      isOpen = false
-    } else if (item) {
-      const bullet = /^\d/.test(item[2] ?? '') ? `${item[2]} ` : '• '
-      out.push({ lead: (item[1] ?? '') + bullet, text: item[3] ?? '', isHeading: false, isGap: false })
-      isOpen = true
-    } else if (quote) {
-      out.push({ lead: '│ ', text: quote[1] ?? '', isHeading: false, isGap: false })
-      isOpen = true
-    } else {
-      const last = out[out.length - 1]
-      if (isOpen && last) last.text += ' ' + raw.trim()
-      else out.push({ lead: '', text: raw.trim(), isHeading: false, isGap: false })
-      isOpen = true
-    }
-  }
-  return out
-}
-
-/** A line's inline Markdown as pieces: plain text, **bold**, *italic*, `code`, and a link's text. */
-type Piece = { text: string; kind: 'plain' | 'bold' | 'italic' | 'code' | 'link' }
-
-function piecesOf(text: string): Piece[] {
-  const out: Piece[] = []
-  const marks = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\s][^*]*)\*|\[([^\]]+)\]\([^)]*\)/g
-  let from = 0
-  for (let m = marks.exec(text); m; m = marks.exec(text)) {
-    if (m.index > from) out.push({ text: text.slice(from, m.index), kind: 'plain' })
-    if (m[1] !== undefined) out.push({ text: m[1], kind: 'bold' })
-    else if (m[2] !== undefined) out.push({ text: m[2], kind: 'code' })
-    else if (m[3] !== undefined) out.push({ text: m[3], kind: 'italic' })
-    else out.push({ text: m[4] ?? '', kind: 'link' })
-    from = m.index + m[0].length
-  }
-  if (from < text.length) out.push({ text: text.slice(from), kind: 'plain' })
-  return out
-}
-
-/** Columns a string takes in a terminal: 2 for CJK and emoji, 1 otherwise. */
-function widthOf(text: string): number {
-  let w = 0
-  for (const ch of text) {
-    const c = ch.codePointAt(0) ?? 0
-    const isWide =
-      (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) || (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) ||
-      (c >= 0xfe30 && c <= 0xfe4f) || (c >= 0xff00 && c <= 0xff60) || (c >= 0xffe0 && c <= 0xffe6) || c >= 0x1f300
-    w += isWide ? 2 : 1
-  }
-  return w
-}
-
-/** Pieces laid out as rows no wider than `max` columns, broken at spaces. A Button draws one row, so the plugin wraps. */
-function wrap(pieces: readonly Piece[], max: number): Piece[][] {
-  const rows: Piece[][] = [[]]
-  let used = 0
-  for (const piece of pieces) {
-    for (const token of piece.text.split(/(\s+)/)) {
-      if (token === '') continue
-      const isSpace = /^\s+$/.test(token)
-      const w = widthOf(token)
-      let row = rows[rows.length - 1] ?? []
-      if (used + w > max && used > 0) {
-        row = []
-        rows.push(row)
-        used = 0
-        if (isSpace) continue
-      }
-      if (isSpace && used === 0) continue
-      const last = row[row.length - 1]
-      if (last && last.kind === piece.kind) last.text += isSpace ? ' ' : token
-      else row.push({ text: isSpace ? ' ' : token, kind: piece.kind })
-      used += isSpace ? 1 : w
-    }
-  }
-  return rows.filter(row => row.length > 0)
-}
 
 /** What a chunk offers to open: itself, when it is English. `inText`: its own text is the button. */
 function offers(c: Chunk): (Unit & { inText: boolean })[] {
@@ -502,74 +326,97 @@ export const register: Register = on => {
           </Text>
         )
 
-        let body
+        // The mark shows only while the pointer is on the chunk, beside the chunk's last line, so nothing moves.
+        const bullet = i === 0 && e.props.isFirstOfReply ? '●' : ' '
+        const mark = u ? <Button key={`g${i}`} plain label={opens[0] ? '▾' : '▸'} onPress={() => toggle($, rowId, u.text)} /> : null
+
+        let block
         if (!u) {
-          body = <Markdown text={c.src} />
+          block = (
+            <Box flexDirection="row">
+              <Box width={2} flexShrink={0}>
+                <Text>{bullet}</Text>
+              </Box>
+              <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+                <Markdown text={c.src} />
+              </Box>
+            </Box>
+          )
         } else if (u.inText) {
-          // Prose: plain text, never highlighted. The mark that opens it is in the gutter (see the row below).
+          // Prose: plain text, never highlighted, drawn row by row, each row with its own gutter cell.
+          // The first cell holds the reply's bullet; the last cell is where the mark shows, over it.
           const columns = e.viewport?.columns ?? 100
-          const lines = linesOf(c.src)
-          body = (
+          const laid: { lead: string; pieces: Piece[]; isHeading: boolean }[] = []
+          for (const line of linesOf(c.src)) {
+            if (line.isGap) {
+              laid.push({ lead: '', pieces: [], isHeading: false })
+              continue
+            }
+            const leadWidth = widthOf(line.lead)
+            // 2 for the gutter, 2 spare: a row that reaches the edge is cut.
+            wrap(piecesOf(line.text), Math.max(20, columns - 4 - leadWidth)).forEach((pieces, r) =>
+              laid.push({ lead: r === 0 ? line.lead : ' '.repeat(leadWidth), pieces, isHeading: line.isHeading }),
+            )
+          }
+          const lastRow = laid.length - 1
+          block = (
             <Box flexDirection="column">
-              {lines.map((line, j) => {
-                if (line.isGap) return <Text> </Text>
-                const leadWidth = widthOf(line.lead)
-                // 2 for the gutter, 2 spare: a row that reaches the edge is cut.
-                const rows = wrap(piecesOf(line.text), Math.max(20, columns - 4 - leadWidth))
-                return (
-                  <Box flexDirection="column">
-                    {rows.map((row, r) => (
-                      <Box flexDirection="row">
-                        {leadWidth > 0 && <Text>{r === 0 ? line.lead : ' '.repeat(leadWidth)}</Text>}
-                        <Text>
-                          {row.map(piece =>
-                            piece.kind === 'plain' && !line.isHeading ? (
-                              piece.text
-                            ) : (
-                              <Text
-                                bold={line.isHeading || piece.kind === 'bold'}
-                                italic={piece.kind === 'italic'}
-                                underline={piece.kind === 'link'}
-                                color={piece.kind === 'code' ? 'permission' : undefined}
-                              >
-                                {piece.text}
-                              </Text>
-                            ),
-                          )}
-                        </Text>
+              {laid.map((row, k) => (
+                <Box flexDirection="row">
+                  <Box width={2} flexShrink={0}>
+                    <Text>{k === 0 ? bullet : ' '}</Text>
+                    {k === lastRow && (
+                      <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }}>
+                        {mark}
                       </Box>
-                    ))}
+                    )}
                   </Box>
-                )
-              })}
-              {translation}
+                  {row.lead !== '' && <Text>{row.lead}</Text>}
+                  <Text>
+                    {row.pieces.length === 0
+                      ? ' '
+                      : row.pieces.map(piece =>
+                          piece.kind === 'plain' && !row.isHeading ? (
+                            piece.text
+                          ) : (
+                            <Text
+                              bold={row.isHeading || piece.kind === 'bold'}
+                              italic={piece.kind === 'italic'}
+                              underline={piece.kind === 'link'}
+                              color={piece.kind === 'code' ? 'permission' : undefined}
+                            >
+                              {piece.text}
+                            </Text>
+                          ),
+                        )}
+                  </Text>
+                </Box>
+              ))}
             </Box>
           )
         } else {
-          // A table, or prose that ends in code: drawn as it is; its mark is in the gutter too.
-          body = (
-            <Box flexDirection="column">
-              <Markdown text={c.src} />
-              {translation}
+          // A table, or prose that ends in code: drawn by the engine, so its height is not known here. The gutter
+          // stretches to it: the bullet at its top, the mark at its bottom. (Such a chunk has two lines or more.)
+          block = (
+            <Box flexDirection="row">
+              <Box width={2} flexShrink={0} flexDirection="column" justifyContent="space-between">
+                <Text>{bullet}</Text>
+                <Box display="none" hover={{ display: 'flex' }}>
+                  {mark}
+                </Box>
+              </Box>
+              <Box flexDirection="column" flexGrow={1} flexShrink={1}>
+                <Markdown text={c.src} />
+              </Box>
             </Box>
           )
         }
 
         return (
-          // The keyed Box is the hover area: the gutter, the chunk and the cells to its right. While the pointer
-          // is on it, the mark shows at the start of the chunk's first line, over the gutter, so nothing moves.
-          <Box key={u ? `h${i}` : undefined} flexDirection="row" marginTop={i === 0 ? 0 : 1}>
-            <Box width={2} flexShrink={0}>
-              <Text>{i === 0 && e.props.isFirstOfReply ? '●' : ' '}</Text>
-              {u && (
-                <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }}>
-                  <Button key={`g${i}`} plain label={opens[0] ? '▾' : '▸'} onPress={() => toggle($, rowId, u.text)} />
-                </Box>
-              )}
-            </Box>
-            <Box flexDirection="column" flexGrow={1} flexShrink={1}>
-              {body}
-            </Box>
+          // The keyed Box is the hover area: the chunk with its gutter, its translation, and the cells to their right.
+          <Box key={u ? `h${i}` : undefined} flexDirection="column" marginTop={i === 0 ? 0 : 1}>
+            {block}
+            {translation && <Box paddingLeft={2}>{translation}</Box>}
           </Box>
         )
       }),
