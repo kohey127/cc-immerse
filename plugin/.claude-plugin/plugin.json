@@ -68,6 +68,130 @@
         "Greek",
         "Hebrew"
       ]
+    },
+    "readingLevel": {
+      "type": "string",
+      "title": "Immerse · Reading level",
+      "description": "How much help you get reading replies. 1: both languages side by side. 2: your language shown faintly below. 3: hidden, opened with a click. 4: as 3. 5: no help. Each thing a level sets can also be set by itself below.",
+      "default": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    "writingLevel": {
+      "type": "string",
+      "title": "Immerse · Writing level",
+      "description": "How much help you get writing. 1 to 3: what you type in your language is sent in the language you are learning, and what you type in that language is corrected as you type and after you send. 4: corrected only after you send. 5: no help.",
+      "default": "3",
+      "options": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    },
+    "showTranslation": {
+      "type": "string",
+      "title": "Immerse · When the translation shows",
+      "description": "On request: hidden until you click a block’s mark. Always, below: under every block. Side by side: beside every block, in a wide window. Never: replies are left as they are.",
+      "default": "Follow the level",
+      "options": [
+        "Follow the level",
+        "On request",
+        "Always, below",
+        "Side by side",
+        "Never"
+      ]
+    },
+    "mark": {
+      "type": "string",
+      "title": "Immerse · Mark",
+      "description": "The character you click to open a block’s translation.",
+      "default": "▸"
+    },
+    "markPosition": {
+      "type": "string",
+      "title": "Immerse · Mark position",
+      "description": "Beside which line of its block the mark sits.",
+      "default": "Last line",
+      "options": [
+        "Last line",
+        "First line"
+      ]
+    },
+    "markVisibility": {
+      "type": "string",
+      "title": "Immerse · Mark visibility",
+      "description": "On hover: the mark appears while the pointer is on its block. Always: it is drawn at rest.",
+      "default": "On hover",
+      "options": [
+        "On hover",
+        "Always"
+      ]
+    },
+    "translationStyle": {
+      "type": "string",
+      "title": "Immerse · Translation style",
+      "description": "How an open translation is drawn.",
+      "default": "Faint italic",
+      "options": [
+        "Faint italic",
+        "Faint",
+        "Normal"
+      ]
+    },
+    "allButtons": {
+      "type": "boolean",
+      "title": "Immerse · Open-all and close-all buttons",
+      "description": "Two buttons at the end of a message that open or close every translation in it.",
+      "default": true
+    },
+    "nativeInput": {
+      "type": "string",
+      "title": "Immerse · What you type in your language",
+      "description": "Send in the language you are learning: Claude receives that version. Show it, send as typed: you see that version, Claude receives your own words. Leave it alone: nothing is done.",
+      "default": "Follow the level",
+      "options": [
+        "Follow the level",
+        "Send in the language you are learning",
+        "Show it, send as typed",
+        "Leave it alone"
+      ]
+    },
+    "livePreview": {
+      "type": "boolean",
+      "title": "Immerse · Preview while typing",
+      "description": "A line above the prompt box, made each time you pause: your draft in the language you are learning, or as it would read corrected. One small model call per pause.",
+      "default": true
+    },
+    "previewDelay": {
+      "type": "string",
+      "title": "Immerse · Preview wait",
+      "description": "How long you must pause before the preview is made. Longer means fewer model calls.",
+      "default": "0.6 s",
+      "options": [
+        "0.3 s",
+        "0.6 s",
+        "1 s",
+        "2 s"
+      ]
+    },
+    "corrections": {
+      "type": "string",
+      "title": "Immerse · Corrections",
+      "description": "When what you type in the language you are learning is corrected.",
+      "default": "Follow the level",
+      "options": [
+        "Follow the level",
+        "While typing and after sending",
+        "After sending",
+        "Off"
+      ]
     }
   }
 }

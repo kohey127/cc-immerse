@@ -3,6 +3,8 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Draft, Tr } from '../types'
 import { fixSystem, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
+import { readSettings } from './settings'
+import type { Settings } from './settings'
 import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, widthOf, wrap } from './text'
 import type { Chunk, Piece } from './text'
 
@@ -15,6 +17,7 @@ const DRAFT = { plugin: 'cc-immerse', key: 'draft' } as const
 // the session starts: a session with nobody at its prompt (`claude -p`, a scheduled run) is left alone,
 // so that a script's own prompt is never rewritten.
 let pair: Pair = pairOf('', '')
+let settings: Settings = readSettings({})
 let isActive = true
 
 /** The key a translation of `src` is kept under: by native language, so a changed setting translates afresh. */
@@ -173,6 +176,7 @@ async function setAll($: EngineInterface, requestId: string, chunks: readonly Ch
 
 export const register: Register = (on, options) => {
   pair = pairOf(String(options.nativeLanguage ?? ''), String(options.targetLanguage ?? ''))
+  settings = readSettings(options)
 
   // Which messages are the latest reply, for /immerse. Module values: a reload starts them over.
   // A reload, a resize or a scroll draws old messages again, so "drawn lately" is not "latest":
@@ -330,43 +334,64 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
-    if (!isActive || e.props.isSummary) return next(e)
+    if (!isActive || settings.show === 'never' || e.props.isSummary) return next(e)
     const chunks = split(e.props.text, pair)
     if (!chunks.some(c => c.isProse)) return next(e)
     drawn.set(e.requestId, chunks)
     if (hasTurn && !before.has(e.requestId)) recent.set(e.requestId, chunks)
     const { Box, Button, Markdown, Text } = $.ui.resolve(e)
 
+    const columns = e.viewport?.columns ?? 100
+    // `isAlways`: every translation shows with no press, so there is no mark and nothing to open or close.
+    const isAlways = settings.show !== 'request'
+    // Side by side needs room for two columns of text: a narrow window gets the translation below instead.
+    const half = Math.floor((columns - 6) / 2)
+    const isSide = settings.show === 'side' && half >= 40
+    const isFaint = settings.style !== 'normal'
+    const isSlanted = settings.style === 'faint-italic'
+    const isMarkHidden = settings.markShown === 'hover'
+
     let total = 0
     let openTotal = 0
     const rows = await Promise.all(
       chunks.map(async (c, i) => {
-        const units = offers(c)
-        const opens = await Promise.all(units.map(async u => (await $.state.get({ ...OPEN, id: `${e.requestId}:${i}:${u.k}` })).value ?? false))
-        const bodies = await Promise.all(
-          units.map(async (u, n) => {
-            if (!opens[n]) return null
-            const tr = (await $.state.get({ ...TR, id: trId(u.text) })).value
-            return !tr || tr.status === 'pending' ? '…' : tr.status === 'error' ? `✗ ${tr.text}` : tr.text
-          }),
-        )
-        total += units.length
-        openTotal += opens.filter(Boolean).length
-
-        const u = units[0]
+        const u = offers(c)[0]
         const rowId = `${e.requestId}:${i}:0`
-        const tr = u && opens[0] ? (await $.state.get({ ...TR, id: trId(u.text) })).value : null
-        const translation = !u || !opens[0] ? null : c.isTable && tr?.status === 'done' ? (
-          <Markdown text={tr.text} dimColor />
+        const isOpen = u ? isAlways || ((await $.state.get({ ...OPEN, id: rowId })).value ?? false) : false
+        const tr = u && isOpen ? (await $.state.get({ ...TR, id: trId(u.text) })).value : null
+        // Shown with no press: the translation is asked for as the chunk is drawn. Once asked, the state holds
+        // it (pending, then done), so drawing the chunk again asks nothing.
+        if (u && isAlways && !tr) $.clock.after(0, () => void translate($, u.text))
+        if (u) total++
+        if (u && isOpen) openTotal++
+
+        const words = !tr || tr.status === 'pending' ? '…' : tr.status === 'error' ? `✗ ${tr.text}` : tr.text
+        const translation = !u || !isOpen ? null : c.isTable && tr?.status === 'done' ? (
+          <Markdown text={tr.text} dimColor={isFaint} />
         ) : (
-          <Text dimColor italic>
-            {bodies[0] ?? ''}
+          <Text dimColor={isFaint} italic={isSlanted}>
+            {words}
           </Text>
         )
 
-        // The mark shows only while the pointer is on the chunk, beside the chunk's last line, so nothing moves.
         const bullet = i === 0 && e.props.isFirstOfReply ? '●' : ' '
-        const mark = u ? <Button key={`g${i}`} plain label={opens[0] ? '▾' : '▸'} onPress={() => toggle($, rowId, u.text)} /> : null
+        const mark =
+          u && !isAlways ? <Button key={`g${i}`} plain label={isOpen ? '▾' : settings.mark} onPress={() => toggle($, rowId, u.text)} /> : null
+        // Drawn over its gutter cell, so nothing moves; hidden until the pointer is on the chunk unless set to show always.
+        const overCell = mark ? (
+          isMarkHidden ? (
+            <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }}>
+              {mark}
+            </Box>
+          ) : (
+            <Box position="absolute" top={0} left={0}>
+              {mark}
+            </Box>
+          )
+        ) : null
+
+        // A chunk the plugin draws itself can have its translation beside it; one the engine draws is too wide.
+        const isBeside = isSide && Boolean(u?.inText)
 
         let block
         if (!u) {
@@ -382,8 +407,8 @@ export const register: Register = (on, options) => {
           )
         } else if (u.inText) {
           // Prose: plain text, never highlighted, drawn row by row, each row with its own gutter cell.
-          // The first cell holds the reply's bullet; the last cell is where the mark shows, over it.
-          const columns = e.viewport?.columns ?? 100
+          // The first cell holds the reply's bullet; the mark shows over the cell of the line the setting names.
+          const room = isBeside ? half : columns - 4 // 2 for the gutter, 2 spare: a row that reaches the edge is cut
           const laid: { lead: string; pieces: Piece[]; isHeading: boolean }[] = []
           for (const line of linesOf(c.src)) {
             if (line.isGap) {
@@ -391,23 +416,18 @@ export const register: Register = (on, options) => {
               continue
             }
             const leadWidth = widthOf(line.lead)
-            // 2 for the gutter, 2 spare: a row that reaches the edge is cut.
-            wrap(piecesOf(line.text), Math.max(20, columns - 4 - leadWidth)).forEach((pieces, r) =>
+            wrap(piecesOf(line.text), Math.max(20, room - leadWidth)).forEach((pieces, r) =>
               laid.push({ lead: r === 0 ? line.lead : ' '.repeat(leadWidth), pieces, isHeading: line.isHeading }),
             )
           }
-          const lastRow = laid.length - 1
+          const markRow = settings.markAt === 'first' ? 0 : laid.length - 1
           block = (
             <Box flexDirection="column">
               {laid.map((row, k) => (
                 <Box flexDirection="row">
                   <Box width={2} flexShrink={0}>
                     <Text>{k === 0 ? bullet : ' '}</Text>
-                    {k === lastRow && (
-                      <Box position="absolute" top={0} left={0} display="none" hover={{ display: 'flex' }}>
-                        {mark}
-                      </Box>
-                    )}
+                    {k === markRow && overCell}
                   </Box>
                   {row.lead !== '' && <Text>{row.lead}</Text>}
                   <Text>
@@ -433,16 +453,22 @@ export const register: Register = (on, options) => {
             </Box>
           )
         } else {
-          // A table, or prose that ends in code: drawn by the engine, so its height is not known here. The gutter
-          // stretches to it: the bullet at its top, the mark at its bottom. (Such a chunk has two lines or more.)
+          // A table, or prose that ends in code: drawn by the engine, so its height is not known here. For the
+          // last line the gutter stretches to the chunk, the bullet at its top and the mark at its bottom (such
+          // a chunk has two lines or more). For the first line the mark shows over the bullet's cell.
           block = (
             <Box flexDirection="row">
-              <Box width={2} flexShrink={0} flexDirection="column" justifyContent="space-between">
-                <Text>{bullet}</Text>
-                <Box display="none" hover={{ display: 'flex' }}>
-                  {mark}
+              {settings.markAt === 'first' ? (
+                <Box width={2} flexShrink={0}>
+                  <Text>{bullet}</Text>
+                  {overCell}
                 </Box>
-              </Box>
+              ) : (
+                <Box width={2} flexShrink={0} flexDirection="column" justifyContent="space-between">
+                  <Text>{bullet}</Text>
+                  {mark && (isMarkHidden ? <Box display="none" hover={{ display: 'flex' }}>{mark}</Box> : <Box>{mark}</Box>)}
+                </Box>
+              )}
               <Box flexDirection="column" flexGrow={1} flexShrink={1}>
                 <Markdown text={c.src} />
               </Box>
@@ -452,9 +478,19 @@ export const register: Register = (on, options) => {
 
         return (
           // The keyed Box is the hover area: the chunk with its gutter, its translation, and the cells to their right.
-          <Box key={u ? `h${i}` : undefined} flexDirection="column" marginTop={i === 0 ? 0 : 1}>
-            {block}
-            {translation && <Box paddingLeft={2}>{translation}</Box>}
+          <Box key={mark ? `h${i}` : undefined} flexDirection={isBeside ? 'row' : 'column'} marginTop={i === 0 ? 0 : 1}>
+            {isBeside ? (
+              <Box width={half + 2} flexShrink={0}>
+                {block}
+              </Box>
+            ) : (
+              block
+            )}
+            {translation && (
+              <Box paddingLeft={2} width={isBeside ? half + 2 : undefined} flexShrink={1}>
+                {translation}
+              </Box>
+            )}
           </Box>
         )
       }),
@@ -463,10 +499,14 @@ export const register: Register = (on, options) => {
     return (
       <Box flexDirection="column">
         {rows}
-        {total >= 2 && (
+        {settings.hasAllButtons && !isAlways && total >= 2 && (
           <Box flexDirection="row" gap={2} paddingLeft={2} marginTop={1}>
-            {openTotal < total && <Button key="all-open" plain dimColor label={`▸▸ ALL ${pair.native.tag} OPEN`} onPress={() => setAll($, e.requestId, chunks, true)} />}
-            {openTotal > 0 && <Button key="all-close" plain dimColor label={`▾▾ ALL ${pair.native.tag} CLOSE`} onPress={() => setAll($, e.requestId, chunks, false)} />}
+            {openTotal < total && (
+              <Button key="all-open" plain dimColor label={`▸▸ ALL ${pair.native.tag} OPEN`} onPress={() => setAll($, e.requestId, chunks, true)} />
+            )}
+            {openTotal > 0 && (
+              <Button key="all-close" plain dimColor label={`▾▾ ALL ${pair.native.tag} CLOSE`} onPress={() => setAll($, e.requestId, chunks, false)} />
+            )}
           </Box>
         )}
       </Box>
