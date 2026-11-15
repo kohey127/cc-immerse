@@ -7,8 +7,11 @@
   "plugins": [
     {
       "name": "cc-immerse",
-      "source": "./",
+      "source": "./plugin",
       "description": "Learn English while you work in Claude Code: replies stay in English with the Japanese one click away, Japanese you type is sent as English, and English you type is corrected beside the conversation."
     }
-  ]
+  ],
+  "metadata": {
+    "description": "cc-immerse: learn a language while you work in Claude Code."
+  }
 }
