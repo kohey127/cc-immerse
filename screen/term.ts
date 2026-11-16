@@ -12,13 +12,14 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { PROBE, startModel } from './model'
+import { startModel } from './model'
 import type { Model, Script } from './model'
 
 const ROOT = resolve(import.meta.dir, '..')
 /** Where pictures and recordings go. Not in git. */
 export const OUT = join(ROOT, 'screen', 'out')
-const KEY = 'sk-ant-screen-check'
+// Not a key: the stand-in model takes anything. Claude Code only needs one to be set.
+const KEY = 'not-a-key-screen-check'
 
 export type Options = {
   script: Script
@@ -52,6 +53,8 @@ export type Session = {
   move(row: number, col: number): Promise<void>
   /** Presses and releases the left button at a 0-based row and column. */
   click(row: number, col: number): Promise<void>
+  /** Turns the wheel down (or up, for a negative count) with the pointer at a 0-based row and column. */
+  wheel(row: number, col: number, lines: number): Promise<void>
   /** Saves a picture of the screen as `out/<name>.png` and returns its path. */
   shot(name: string): Promise<string>
   close(): Promise<void>
@@ -135,6 +138,11 @@ export async function open(opts: Options): Promise<Session> {
       await t.mouse.click(col, row)
       await Bun.sleep(150)
     },
+    async wheel(row, col, lines) {
+      await session.move(row, col)
+      await t.mouse.scroll(lines < 0 ? 'up' : 'down', { amount: Math.abs(lines) })
+      await Bun.sleep(200)
+    },
     async shot(name) {
       await settle()
       const path = join(OUT, `${name}.png`)
@@ -156,21 +164,23 @@ export async function open(opts: Options): Promise<Session> {
     cwd: work,
     env: environment({ CLAUDE_CONFIG_DIR: config, ANTHROPIC_API_KEY: KEY, ANTHROPIC_BASE_URL: model.url, DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1' }),
   })
-  // The prompt box is drawn before the plugin has loaded, and what is typed in between gets no line
-  // above the box. So a sentence is typed until the plugin answers it, then taken out again.
+  // The prompt box is drawn before the plugin has loaded, and what is typed in between is not the
+  // plugin's to see. Its command is typed until Claude Code offers it by its description, then taken out:
+  // that shows the plugin loaded whatever its options are.
   await session.waitFor(/^❯/, 30000)
+  // A row under the prompt box naming the command: cut short in a narrow window, so matched by its start.
+  const OFFERED = /^(?!❯).*\/immerse\s+\S/
   for (let tries = 1; ; tries++) {
-    await t.type(PROBE)
-    const isLoaded = await session.waitFor('FIX ▸ ✓', 2500).then(
+    await t.type('/immerse')
+    const isLoaded = await session.waitFor(OFFERED, 2500).then(
       () => true,
       () => false,
     )
     await t.press('Ctrl+U')
-    await session.waitGone(PROBE)
+    await session.waitGone(OFFERED)
     if (isLoaded) break
-    if (tries === 8) throw new Error(`the plugin never drew its line above the prompt box. The screen:\n${(await screen()).join('\n')}`)
+    if (tries === 8) throw new Error(`Claude Code never offered the plugin's command. The screen:\n${(await screen()).join('\n')}`)
   }
-  await session.waitGone('FIX ▸')
   if (opts.record) await t.startRecording(join(OUT, `${opts.record}.gif`))
   return session
 }

@@ -76,9 +76,6 @@ function answer(body: { model?: string; stream?: boolean }, text: string): Respo
   return new Response(events.map(([name, data]) => `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`).join(''), { headers: { 'content-type': 'text/event-stream' } })
 }
 
-/** What `term.ts` types to learn that the plugin has loaded; its correction is answered here and counted nowhere. */
-export const PROBE = 'Is the plugin ready now?'
-
 export function startModel(script: Script): Model {
   const pair = script.pair ?? pairOf('', '')
   const unscripted: string[] = []
@@ -94,7 +91,6 @@ export function startModel(script: Script): Model {
       const kind = text === null ? null : kindOf(textOf(body.system), pair)
       if (kind !== null && text !== null) {
         const src = text.trim()
-        if (src === PROBE) return answer(body, 'OK')
         calls.push({ kind, text: src })
         const scripted = script.small?.[kind]?.[src]
         if (scripted === undefined) unscripted.push(`${kind}: ${src}`)
