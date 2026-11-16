@@ -8,7 +8,7 @@ Translation plugins put your own language next to the English, and then you read
 
 You already spend hours a day reading and writing with Claude Code. This turns those hours into practice, without a separate study session.
 
-> **Status: early.** It works in the Claude Code terminal. It has been used daily for Japanese and English; 22 languages can be chosen in the settings, and the other pairs are covered by tests but not yet by real use. The levels and settings are built and covered by tests; most have not been through daily use yet. See [Roadmap](#roadmap) for what is still to come.
+> **Status: early.** It works in the Claude Code terminal. It has been used daily for Japanese and English; 22 languages can be chosen in the settings, and the other pairs are covered by tests but not yet by real use. The levels and settings are new and checked on a real screen by automated tests; most have not been through daily use yet.
 
 The examples below use a Japanese speaker learning English, the defaults.
 
@@ -38,46 +38,33 @@ The corrections are made beside the conversation by a small model. Claude never 
 
 ## Too much at once? Start lower
 
-Full immersion on the first day is hard, and a tool you stop using teaches nothing. So there is a ladder you climb at your own speed. Reading and writing have their own level.
+Full immersion on the first day is hard, and a tool you stop using teaches nothing. So reading has a ladder you climb at your own speed: it starts with your own language in front and ends with the language you are learning in front.
 
-| Level | Reading | Writing |
+| Reading level | What you read first | What you see |
 | --- | --- | --- |
-| 1 | Both languages side by side (in a wide window) | Type your language: the English is shown and sent. Type English: it is corrected while you type and after you send |
-| 2 | English, with your language shown faintly below | Same as 1 |
-| **3 (default)** | English only; point and click to open your language | Same as 1 |
-| 4 | Same as 3 for now | Corrected only after you send |
-| 5 | No help | No help |
+| 1 | Your language | The reply in your language; point and click to open the English under a block |
+| 2 | Your language | Two columns: your language on the left, the English on the right, faint |
+| 3 | English | Two columns: the English on the left, your language on the right, faint |
+| **4 (default)** | English | English only; point and click to open your language |
 
-<!-- GIF 5: the same reply at levels 1, 2 and 3, one after the other. -->
+<!-- GIF 5: the same reply at levels 1, 2, 3 and 4, one after the other. -->
 
-Level 3 is where the plugin starts, because it is the one that makes you read the English first. If that is too much, set the reading level to 1 or 2 and come back up.
+Level 4 is where the plugin starts, because it is the one that makes you read the English first. If that is too much, start lower and come back up. In a narrow window the two columns of levels 2 and 3 become one, the second language under the first.
 
-### Fine-grained settings
+Reading can also be set to Off, and what happens to what you type is set apart from it, so you can keep one and drop the other.
 
-A level is a preset. Each thing it sets can also be set by itself, and then that setting wins.
+### Settings
 
-In Claude Code, open `/config` and find **Immerse**.
+Type `/immerse`. The settings appear above the prompt box as one list, the way `/config` lists its own: a row for each setting, with what is set now beside its name.
 
-| Setting | Default | Choices |
-| --- | --- | --- |
-| Your language | Japanese | 22 languages |
-| Language you are learning | English | 22 languages |
-| Reading level | 3 | 1 to 5 |
-| Writing level | 3 | 1 to 5 |
-| When the translation shows | Follow the level | On request · Always, below · Side by side · Never |
-| Mark | `▸` | Any character |
-| Mark position | Last line | Last line · First line |
-| Mark visibility | On hover | On hover · Always |
-| Translation style | Faint italic | Faint italic · Faint · Normal |
-| Open-all and close-all buttons | On | On · Off |
-| What you type in your language | Follow the level | Send in the language you are learning · Show it, send as typed · Leave it alone |
-| Preview while typing | On | On · Off |
-| Preview wait | 0.6 s | 0.3 s · 0.6 s · 1 s · 2 s |
-| Corrections | Follow the level | While typing and after sending · After sending · Off |
+- **↑ and ↓ move, Enter changes the row, ← goes back.** They work the moment the list opens. A number presses the row beside it.
+- A row with `›` shows its choices in place; a row with two choices flips where it is.
+- **Under the list, a preview follows the keyboard.** On a reading level it is a sample reply drawn as that level draws it. On the rows about typing it says what Claude gets: your words, or their English.
+- A change is in force at once and the list stays, so several things can be changed in one visit. Typing a message closes it.
 
-A settings panel that shows a sample reply redrawing as you move between options is planned.
+`/immerse off` and `/immerse on` switch all help at once; `on` brings back what was set. `/immerse open` and `/immerse close` open and close the latest reply's translations, for a terminal that does not report the mouse.
 
-<!-- GIF 6: the settings panel, the sample redrawing as the option changes. -->
+<!-- GIF 6: /immerse, the list worked by the keyboard, the preview following it, the next reply drawn at the level picked. -->
 
 ## Install
 
@@ -97,9 +84,11 @@ claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 
 | Command | What it does |
 | --- | --- |
-| `/immerse` | Opens the translation for every block of the latest reply |
-| `/immerse off` | Closes every open translation |
-| `/immerse where` | Lists the screens the session draws on |
+| `/immerse` | Shows the settings above the prompt |
+| `/immerse off` | Sets reading to Off and leaves what you type alone |
+| `/immerse on` | Brings back what was set |
+| `/immerse open` | Opens the translation for every block of the latest reply |
+| `/immerse close` | Closes every open translation |
 
 ## What it costs
 
@@ -113,42 +102,23 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 - **Terminal only.** In tests, the phone and desktop apps showed nothing. The reason is not known yet.
 - **Pairs that share an alphabet cost one more wait.** Japanese and English are told apart by their letters, at once. Spanish and English are not, so the small model is asked which language a message is in before it is sent.
 - **A message in a third language is left alone**: sent as typed, with no translation and no correction.
-- **Pointing and clicking need a terminal that reports the mouse.** Without it, use `/immerse`.
+- **Pointing and clicking need a terminal that reports the mouse.** Without it, use `/immerse open`.
 - **English paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different, and links inside them cannot be clicked.
 - Built on Claude Code's plugin API for interface mods, which is early access and may change between releases.
 
 ## Roadmap
 
-- Reading level 4: opening a block shows a simpler rewording in the language you are learning first.
-- A settings panel with a live sample.
 - Instructions to the small model that you can edit.
 - The plugin counting how often you open the translation, and suggesting the next level.
 
 ## Development
 
-The plugin is in `plugin/`. Its tests run with Claude Code's own test runner:
+The plugin is in `plugin/`. `CLAUDE.md` describes the layout, the checks and how the work is done.
 
 ```sh
 claude plugin validate plugin
 claude plugin test plugin
-```
-
-| File | Covers |
-| --- | --- |
-| `plugin/tests/lang.test.ts` | Which language a text is in, for any pair, and what the small model is asked |
-| `plugin/tests/text.test.ts` | How a reply is cut into blocks and laid out in rows |
-| `plugin/tests/reply.test.tsx` | A reply as drawn: the marks, opening and closing a translation |
-| `plugin/tests/pair.test.tsx` | The language settings, corrections under a typed message, and sessions the plugin leaves alone |
-| `plugin/tests/settings.test.ts` | What each level and option means |
-| `plugin/tests/modes.test.tsx` | What each reading setting does to a reply as drawn |
-| `plugin/tests/typing.test.tsx` | A typed message on its way to the model: what is sent in its place, and what is left alone |
-
-A session with nobody at its prompt (`claude -p`, a scheduled run) is left alone, so a script's own prompt is never rewritten.
-
-Checks on a real screen are in `screen/`: a real Claude Code runs in a scripted terminal with the plugin loaded and a stand-in for the model, and each scenario types, moves the pointer, clicks, and reads what is drawn.
-
-```sh
-cd screen && bun install && bun test
+cd screen && bun install && bun test   # checks on a real screen
 ```
 
 ## Prior work
