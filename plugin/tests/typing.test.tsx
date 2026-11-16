@@ -12,33 +12,44 @@ async function send($: any, on: any, text: string, answer = 'Is there a cooler n
   const clock = mock.clock(on)
   let calls = 0
   let received = ''
+  let context: readonly string[] = []
   on('model.complete', () => {
     calls++
     return { value: { isAnswered: true as const, text: answer, usage: USAGE } }
   })
-  on('prompt.submit', (_: unknown, e: { text: string }) => {
+  on('prompt.submit', (_: unknown, e: { text: string; context?: readonly string[] }) => {
     received = e.text
+    context = e.context ?? []
     return { text: e.text }
   })
   await $.prompt.submit({ text })
   await clock.advance(10)
   await clock.settle()
-  return { received, calls }
+  return { received, calls, context }
 }
 
-test('a message in the native language reaches the model in the learned one', async ($, on) => {
+test('levels 3 and 4: a message in the native language reaches the model in the learned one', async ($, on) => {
   const { received, calls } = await send($, on, JAPANESE)
   expect(received).toBe('Is there a cooler name for this?')
   expect(calls).toBe(1)
 })
 
-test('"Leave it alone": a native-language message is sent as typed, with no model call', { options: { nativeInput: 'Leave it alone' } }, async ($, on) => {
+test('levels 3 and 4: the person’s own words go with it, beside the message, so that no meaning is lost', async ($, on) => {
+  const { context } = await send($, on, JAPANESE)
+  expect(context.length).toBe(1)
+  expect(context[0]).toContain(JAPANESE)
+  expect(context[0]).toContain('original wording')
+  // Claude is asked in the learned language and is told to stay in it: with the original in view it would answer in that.
+  expect(context[0]).toContain('Reply in English')
+})
+
+test('levels 1 and 2 with typing help off: a native-language message is sent as typed, with no model call', { options: { readingLevel: '1', typingHelp: false } }, async ($, on) => {
   const { received, calls } = await send($, on, JAPANESE)
   expect(received).toBe(JAPANESE)
   expect(calls).toBe(0)
 })
 
-test('"Show it, send as typed": the model receives the person’s own words', { options: { nativeInput: 'Show it, send as typed' } }, async ($, on) => {
+test('levels 1 and 2: the model receives the person’s own words, with nothing beside them', { options: { readingLevel: '2' } }, async ($, on) => {
   const { received } = await send($, on, JAPANESE)
   expect(received).toBe(JAPANESE)
 })
@@ -49,13 +60,13 @@ test('a message in the learned language is sent as typed and corrected beside th
   expect(calls).toBe(1)
 })
 
-test('corrections Off: a message in the learned language costs no model call', { options: { corrections: 'Off' } }, async ($, on) => {
+test('typing help off: a message in the learned language costs no model call', { options: { typingHelp: false } }, async ($, on) => {
   const { received, calls } = await send($, on, ENGLISH)
   expect(received).toBe(ENGLISH)
   expect(calls).toBe(0)
 })
 
-test('both kinds of typing help off: nothing is done to anything typed', { options: { nativeInput: 'Leave it alone', corrections: 'Off' } }, async ($, on) => {
+test('Off with typing help off: nothing is done to anything typed', { options: { readingLevel: 'Off', typingHelp: false } }, async ($, on) => {
   expect((await send($, on, JAPANESE)).received).toBe(JAPANESE)
 })
 
@@ -95,7 +106,7 @@ test('shared alphabet, judged neither: sent as typed', SPANISH, async ($, on) =>
   expect(received).toBe(TYPED)
 })
 
-test('shared alphabet with nothing to do either way costs no model call', { options: { nativeLanguage: 'Spanish', nativeInput: 'Leave it alone', corrections: 'Off' } }, async ($, on) => {
+test('shared alphabet with nothing to do either way costs no model call', { options: { nativeLanguage: 'Spanish', readingLevel: '1', typingHelp: false } }, async ($, on) => {
   const { received, calls } = await send($, on, TYPED, 'N\nPlease rename this variable.')
   expect(received).toBe(TYPED)
   expect(calls).toBe(0)

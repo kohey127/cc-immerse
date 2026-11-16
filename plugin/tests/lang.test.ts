@@ -137,3 +137,18 @@ test('the answer for a shared alphabet is read by its first line', async () => {
   expect(readJudgement('"N"\nHello there.')).toEqual({ kind: 'native', target: 'Hello there.' })
   expect(readJudgement('something else entirely')).toEqual({ kind: 'other' })
 })
+
+// --- a reply in one language holding words of the other ------------------------------------------------
+
+test('regression: a Japanese sentence holding English words is Japanese', async () => {
+  // Seen on a real screen: "main ブランチで…" was taken for neither language, so a Japanese reply got no translation.
+  for (const text of ['main ブランチでビルドが通りました。', 'git の rebase と merge の違いを説明します。', 'README を更新しました。']) {
+    expect({ text, isJapanese: isTargetText(text, EN_JA), isEnglish: isTargetText(text, JA_EN) }).toEqual({ text, isJapanese: true, isEnglish: false })
+  }
+})
+
+test('an English sentence holding a Japanese word is English', async () => {
+  const text = 'The 設定 file is in the config folder of the project.'
+  expect(isTargetText(text, JA_EN)).toBe(true)
+  expect(isTargetText(text, EN_JA)).toBe(false)
+})

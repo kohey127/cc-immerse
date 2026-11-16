@@ -24,22 +24,6 @@ test('reading Off: the plugin draws nothing of its own', { options: { readingLev
   await ui.unmount()
 })
 
-test('level 3, below: every block is translated with no press, and has no mark', { options: { readingLevel: '3', layout: 'Below' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  let calls = 0
-  on('model.complete', () => {
-    calls++
-    return { value: { isAnswered: true as const, text: JA, usage: USAGE } }
-  })
-  const ui = await $.ui.mount(reply(TWO))
-  await clock.advance(10)
-  await clock.settle()
-  expect(calls).toBe(2)
-  expect((await ui.findAll({ type: 'Text', text: /最初の段落/ })).length).toBe(2)
-  expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
-  await ui.unmount()
-})
-
 test('level 3: in a wide window each block has its translation beside it', { options: { readingLevel: '3' } }, async ($, on) => {
   const clock = mock.clock(on)
   on('model.complete', () => ({ value: { isAnswered: true as const, text: JA, usage: USAGE } }))
@@ -143,55 +127,73 @@ test('level 2: in a wide window the native language is on the left at full stren
   await ui.unmount()
 })
 
-test('level 2, below: the learned language is under the native one, faint', { options: { readingLevel: '2', layout: 'Below' } }, async ($, on) => {
+// --- a reply in the native language: at levels 1 and 2 Claude is asked, and answers, in it -----------
+
+const JA_REPLY = 'これは最初の段落です。'
+const EN_OF_IT = 'This is the first paragraph.'
+
+test('level 1, a native-language reply: drawn as it is, with no model call; the mark opens the learned language, faint', { options: { readingLevel: '1' } }, async ($, on) => {
   const clock = mock.clock(on)
-  on('model.complete', () => ({ value: { isAnswered: true as const, text: JA, usage: USAGE } }))
-  const ui = await $.ui.mount(reply(EN))
+  const systems: string[] = []
+  on('model.complete', (_: unknown, e: { system?: string }) => {
+    systems.push(String(e.system))
+    return { value: { isAnswered: true as const, text: EN_OF_IT, usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply(JA_REPLY))
   await clock.advance(10)
   await clock.settle()
+  expect(systems.length).toBe(0)
   expect(Boolean((await ui.find({ type: 'Text', text: /最初の段落/ }))?.props.dimColor)).toBe(false)
+  expect((await ui.find({ type: 'Button', key: 'g0' }))?.props.label).toBe('▸')
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  expect(systems.length).toBe(1)
+  expect(systems[0]).toContain('into natural English')
   expect((await ui.find({ type: 'Text', text: /first paragraph/ }))?.props.dimColor).toBe(true)
+  await ui.unmount()
+})
+
+test('level 2, a native-language reply in a wide window: it on the left at full strength, the learned language beside it, faint', { options: { readingLevel: '2' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: EN_OF_IT, usage: USAGE } }))
+  const ui = await $.ui.mount(reply(JA_REPLY, 140))
+  await clock.advance(10)
+  await clock.settle()
+  const texts = await ui.findAll({ type: 'Text' })
+  const native = texts.findIndex(t => /最初の段落/.test(t.text) && t.props.dimColor !== true)
+  const learned = texts.findIndex(t => /first paragraph/.test(t.text) && t.props.dimColor === true)
+  expect(native).toBeGreaterThanOrEqual(0)
+  expect(learned).toBeGreaterThan(native)
+  await ui.unmount()
+})
+
+test('level 4, a native-language reply: read in the learned language once that arrives, the reply itself behind the mark', { options: { readingLevel: '4' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: EN_OF_IT, usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply(JA_REPLY))
+  await clock.advance(10)
+  await clock.settle()
+  expect(calls).toBe(1)
+  expect(Boolean((await ui.find({ type: 'Text', text: /first paragraph/ }))?.props.dimColor)).toBe(false)
+  expect((await ui.findAll({ type: 'Text', text: /最初の段落/ })).length).toBe(0)
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  expect(calls).toBe(1)
+  expect((await ui.find({ type: 'Text', text: /最初の段落/ }))?.props.dimColor).toBe(true)
   await ui.unmount()
 })
 
 // --- reading: the mark and the look -----------------------------------------------------------------
 
-test('the mark is the one in the setting', { options: { mark: '🌐' } }, async $ => {
-  const ui = await $.ui.mount(reply('The first paragraph.'))
-  expect((await ui.find({ type: 'Button', key: 'g0' }))?.props.label).toBe('🌐')
-  await ui.unmount()
-})
-
 test('On hover: the mark is hidden until the pointer is on its block', async $ => {
   const ui = await $.ui.mount(reply('The first paragraph.'))
   expect(JSON.stringify(await ui.drawn())).toContain('"display":"none"')
-  await ui.unmount()
-})
-
-test('Always: the mark is drawn at rest', { options: { markVisibility: 'Always' } }, async $ => {
-  const ui = await $.ui.mount(reply('The first paragraph.'))
-  expect(JSON.stringify(await ui.drawn())).not.toContain('"display":"none"')
-  expect((await ui.find({ type: 'Button', key: 'g0' }))?.props.label).toBe('▸')
-  await ui.unmount()
-})
-
-test('the open-all and close-all buttons can be switched off', { options: { allButtons: false } }, async $ => {
-  const ui = await $.ui.mount(reply(TWO))
-  expect(await ui.find({ type: 'Button', key: 'all-open' })).toBe(undefined)
-  expect((await ui.find({ type: 'Button', key: 'g0' }))?.props.label).toBe('▸')
-  await ui.unmount()
-})
-
-test('Faint: an open translation is dim and upright', { options: { translationStyle: 'Faint' } }, async ($, on) => {
-  const clock = mock.clock(on)
-  on('model.complete', () => ({ value: { isAnswered: true as const, text: JA, usage: USAGE } }))
-  const ui = await $.ui.mount(reply('The first paragraph.'))
-  await ui.press({ key: 'g0' })
-  await clock.advance(10)
-  await clock.settle()
-  const translation = await ui.find({ type: 'Text', text: /最初の段落/ })
-  expect(translation?.props.dimColor).toBe(true)
-  expect(Boolean(translation?.props.italic)).toBe(false)
   await ui.unmount()
 })
 

@@ -216,3 +216,14 @@ test('a word wider than the row is broken, since it fits nowhere', async () => {
   for (const row of rows) expect(widthOf(row) <= 20).toBe(true)
   expect(rows.join('')).toBe('https://example.com/a/very/long/path/that/goes/on')
 })
+
+// --- a reply in the native language: Claude answers in the language it was asked in ------------------
+
+test('a block of a reply is marked by its language: the learned one, the native one, or neither', async () => {
+  const chunks = split('The reload finished.\n\n変えました。末尾のボタンが変わります。\n\n```sh\nls\n```', JA_EN)
+  expect(chunks.map(c => [c.isProse, c.isNative])).toEqual([
+    [true, false],
+    [false, true],
+    [false, false],
+  ])
+})

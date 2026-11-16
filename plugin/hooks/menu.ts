@@ -4,15 +4,16 @@
 
 import { LANGUAGES } from './lang'
 import type { Language, Pair } from './lang'
+import { isWithClaudeInTarget, levelOf } from './settings'
 
 /** What a pick writes: options by their field in `plugin.json`. */
 export type Values = Readonly<Record<string, string | boolean>>
 
 /**
- * What the preview shows for a choice: the sample reply drawn with these options laid over the stored
- * ones, or lines of text (`isFaint`: drawn as the plugin draws its own grey lines).
+ * What the preview shows for a choice: an exchange at a level (what is typed, what Claude gets, how the
+ * reply is read), or lines of text (`isFaint`: drawn as the plugin draws its own grey lines).
  */
-export type Preview = { kind: 'reply'; options: Values } | { kind: 'lines'; lines: readonly { text: string; isFaint?: boolean }[] }
+export type Preview = { kind: 'exchange'; level: string } | { kind: 'lines'; lines: readonly { text: string; isFaint?: boolean }[] }
 
 export type Choice = {
   key: string
@@ -44,50 +45,48 @@ export type Sample = {
 
 type Options = Readonly<Record<string, unknown>>
 
+/** The sample in each language the plugin offers: the same three sentences. Short, so that two fit side by side. */
 const SAMPLES: Readonly<Record<string, Sample>> = {
   en: { reply: ['The build passed.', 'Two tests failed.'], asked: 'What is the build status?' },
   ja: { reply: ['ビルド成功です。', 'テスト2件が失敗。'], asked: 'ビルドの状態は？' },
+  ko: { reply: ['빌드가 통과했습니다.', '테스트 2개가 실패했습니다.'], asked: '빌드 상태가 어떤가요?' },
+  'zh-Hans': { reply: ['构建通过了。', '两个测试失败了。'], asked: '构建状态如何？' },
+  'zh-Hant': { reply: ['建置通過了。', '兩個測試失敗了。'], asked: '建置狀態如何？' },
+  es: { reply: ['La compilación pasó.', 'Fallaron dos pruebas.'], asked: '¿Cuál es el estado de la compilación?' },
+  fr: { reply: ['La compilation a réussi.', 'Deux tests ont échoué.'], asked: "Quel est l'état de la compilation ?" },
+  de: { reply: ['Der Build war erfolgreich.', 'Zwei Tests sind fehlgeschlagen.'], asked: 'Wie ist der Build-Status?' },
+  pt: { reply: ['A compilação passou.', 'Dois testes falharam.'], asked: 'Qual é o estado da compilação?' },
+  it: { reply: ['La build è riuscita.', 'Due test sono falliti.'], asked: 'Qual è lo stato della build?' },
+  nl: { reply: ['De build is geslaagd.', 'Twee tests zijn mislukt.'], asked: 'Wat is de status van de build?' },
+  pl: { reply: ['Build się powiódł.', 'Dwa testy nie przeszły.'], asked: 'Jaki jest status builda?' },
+  tr: { reply: ['Derleme başarılı oldu.', 'İki test başarısız oldu.'], asked: 'Derlemenin durumu nedir?' },
+  vi: { reply: ['Bản build đã thành công.', 'Hai bài kiểm thử thất bại.'], asked: 'Trạng thái build thế nào?' },
+  id: { reply: ['Build berhasil.', 'Dua tes gagal.'], asked: 'Bagaimana status build-nya?' },
+  ru: { reply: ['Сборка прошла успешно.', 'Два теста не прошли.'], asked: 'Каков статус сборки?' },
+  uk: { reply: ['Збірка пройшла успішно.', 'Два тести не пройшли.'], asked: 'Який статус збірки?' },
+  ar: { reply: ['نجح البناء.', 'فشل اختباران.'], asked: 'ما حالة البناء؟' },
+  hi: { reply: ['बिल्ड सफल रहा।', 'दो टेस्ट विफल हुए।'], asked: 'बिल्ड की स्थिति क्या है?' },
+  th: { reply: ['บิลด์ผ่านแล้ว', 'การทดสอบสองรายการล้มเหลว'], asked: 'สถานะของบิลด์เป็นอย่างไร' },
+  el: { reply: ['Το build ολοκληρώθηκε με επιτυχία.', 'Δύο τεστ απέτυχαν.'], asked: 'Ποια είναι η κατάσταση του build;' },
+  he: { reply: ['הבנייה עברה בהצלחה.', 'שני מבחנים נכשלו.'], asked: 'מה מצב הבנייה?' },
 }
 
-/** The sample in a language; one with no sample of its own stands as its name in brackets. */
+/** The sample in a language. Every language the plugin offers has one; the English one stands for any that does not. */
 export function sampleIn(language: Language): Sample {
-  return SAMPLES[language.code] ?? { reply: [`(${language.name})`, `(${language.name})`], asked: `(${language.name})` }
+  return SAMPLES[language.code] ?? (SAMPLES.en as Sample)
 }
 
 export function samplesOf(pair: Pair): { native: Sample; target: Sample } {
   return { native: sampleIn(pair.native), target: sampleIn(pair.target) }
 }
 
-/** What is in force where nothing is stored: `plugin.json`'s defaults. */
-const DEFAULTS: Values = {
-  readingLevel: '4',
-  nativeInput: 'Send in the language you are learning',
-  corrections: 'While typing and after sending',
-  mark: '▸',
-  markPosition: 'Last line',
-  markVisibility: 'On hover',
-  translationStyle: 'Faint italic',
-  layout: 'Side by side',
-  allButtons: true,
-  livePreview: true,
-  previewDelay: '0.6 s',
-}
-
-/** The reading level as stored, Off included; level 4 when nothing valid is stored. */
-export function levelOf(options: Options): string {
-  const level = String(options.readingLevel ?? '').trim()
-  return ['Off', '1', '2', '3', '4'].includes(level) ? level : '4'
-}
-
 type Draft = { label: string; about?: string; set: Values; preview: Preview }
 
-/** A row from its choices. The one in force is the first whose every value is the stored one; the first choice when none is. */
-function rowOf(key: string, name: string, drafts: readonly Draft[], options: Options, shown?: (c: Draft) => string): Row {
-  const valueOf = (field: string): unknown => (field === 'readingLevel' ? levelOf(options) : (options[field] ?? DEFAULTS[field]))
-  const found = drafts.findIndex(d => Object.entries(d.set).every(([field, value]) => valueOf(field) === value))
-  const now = Math.max(0, found)
-  const choices = drafts.map((d, i) => ({ key: `${key}-${i}`, label: d.label, about: d.about ?? '', set: d.set, isNow: i === now, preview: d.preview }))
-  const current = drafts[now] as Draft
+/** A row from its choices, `now` the index of the one in force. */
+function rowOf(key: string, name: string, drafts: readonly Draft[], now: number, shown?: (c: Draft) => string): Row {
+  const at = Math.max(0, now)
+  const choices = drafts.map((d, i) => ({ key: `${key}-${i}`, label: d.label, about: d.about ?? '', set: d.set, isNow: i === at, preview: d.preview }))
+  const current = drafts[at] as Draft
   return { key, name, shown: shown ? shown(current) : current.label, choices, isSwitch: drafts.length === 2 }
 }
 
@@ -96,144 +95,57 @@ const lines = (...texts: (string | readonly [string])[]): Preview => ({
   lines: texts.map(t => (typeof t === 'string' ? { text: t } : { text: t[0], isFaint: true })),
 })
 
-/**
- * Every setting as a row. `samples`: the sample texts of the pair's two languages.
- */
+/** Every setting as a row. `samples`: the sample texts of the pair's two languages. */
 export function settingsRows(options: Options, pair: Pair, samples: { native: Sample; target: Sample }): Row[] {
   const [n, t] = [pair.native.name, pair.target.name]
   const { native, target } = samples
   const level = levelOf(options)
-  const reply = (over: Values): Preview => ({ kind: 'reply', options: over })
 
-  const languageRow = (key: string, field: string, name: string, now: Language, other: Language, about: (l: Language) => string): Row =>
-    rowOf(
+  const languageRow = (key: string, field: string, name: string, now: Language, other: Language, about: (l: Language) => string): Row => {
+    const offered = LANGUAGES.filter(l => l.code !== other.code)
+    return rowOf(
       key,
       name,
-      LANGUAGES.filter(l => l.code !== other.code).map(l => ({ label: l.name === l.own ? l.name : `${l.name} · ${l.own}`, set: { [field]: l.name }, preview: lines([about(l)]) })),
-      { ...options, [field]: now.name },
+      offered.map(l => ({ label: l.name === l.own ? l.name : `${l.name} · ${l.own}`, set: { [field]: l.name }, preview: lines([about(l)]) })),
+      offered.findIndex(l => l.code === now.code),
       c => String(c.set[field]),
     )
+  }
 
+  // A level says in which language the person and Claude talk, then where the other language is.
   const levels: readonly [string, string, string][] = [
-    ['Off', 'Off', 'Replies stay as Claude wrote them'],
-    ['1', 'Level 1', `${n} first, ${t} on click`],
-    ['2', 'Level 2', `${n} on the left, ${t} beside it in grey`],
-    ['3', 'Level 3', `${t} on the left, ${n} beside it in grey`],
-    ['4', 'Level 4', `${t} first, ${n} on click`],
+    ['Off', 'Off', 'Nothing is done to replies'],
+    ['1', 'Level 1', `With Claude in ${n} · ${t} on click`],
+    ['2', 'Level 2', `With Claude in ${n} · ${t} beside it`],
+    ['3', 'Level 3', `With Claude in ${t} · ${n} beside it`],
+    ['4', 'Level 4', `With Claude in ${t} · ${n} on click`],
   ]
-
   // What the person typed in the learned language, with a mistake, and as corrected: English has an example.
   const [wrong, fixed] = pair.target.code === 'en' ? ['I has a question.', 'I have a question.'] : [target.asked, `(${t}, corrected)`]
-  const markNow = String(options.mark ?? DEFAULTS.mark).trim() || '▸'
-  const marks = ['▸', '›', '+', '◆'].includes(markNow) ? ['▸', '›', '+', '◆'] : [markNow, '▸', '›', '+', '◆']
-  // The layout shows at levels 2 and 3 only: previewed at level 3 while another level is set.
-  const both: Values = level === '2' || level === '3' ? {} : { readingLevel: '3' }
 
   return [
     languageRow('native', 'nativeLanguage', 'Your language', pair.native, pair.target, l => `Translations and correction notes are written in ${l.name}.`),
-    languageRow('target', 'targetLanguage', 'You are learning', pair.target, pair.native, l => `Replies in ${l.name} get a translation; ${l.name} you type is corrected.`),
+    languageRow('target', 'targetLanguage', 'You are learning', pair.target, pair.native, l => `The language you read and write more of as the level goes up: ${l.name}.`),
     rowOf(
-      'reading',
-      'Reading',
-      levels.map(([value, label, about]) => ({ label, about, set: { readingLevel: value }, preview: reply({ readingLevel: value }) })),
-      options,
-      c => (c.label === 'Off' ? 'Off' : `${c.label} · ${c.about}`),
+      'level',
+      'Level',
+      levels.map(([value, label, about]) => ({ label, about, set: { readingLevel: value }, preview: { kind: 'exchange', level: value } as const })),
+      levels.findIndex(([value]) => value === level),
+      c => (c.label === 'Off' ? 'Off' : `${c.label} · With Claude in ${isWithClaudeInTarget(String(c.set.readingLevel)) ? t : n}`),
     ),
     rowOf(
-      'nativeInput',
-      `${n}, typed`,
+      'typingHelp',
+      'Help while typing',
       [
         {
-          label: `Sent as ${t}`,
-          about: `Claude gets your message in ${t}`,
-          set: { nativeInput: 'Send in the language you are learning' },
-          preview: lines([`${pair.target.tag} ▸ ${target.asked}`], `❯ ${native.asked}`, [`  ↳ ${target.asked}`], `Claude gets: ${target.asked}`),
+          label: 'On',
+          about: 'A line above the prompt box as you type, and a correction under what you sent',
+          set: { typingHelp: true },
+          preview: lines([`${pair.target.tag} ▸ ${target.asked}`], `❯ ${native.asked}`, [`FIX ▸ ${fixed}`], `❯ ${wrong}`),
         },
-        {
-          label: `${t} shown, sent as typed`,
-          about: `You see the ${t} as you type; Claude gets your ${n}`,
-          set: { nativeInput: 'Show it, send as typed' },
-          preview: lines([`${pair.target.tag} ▸ ${target.asked}`], `❯ ${native.asked}`, `Claude gets: ${native.asked}`),
-        },
-        { label: 'Left alone', about: `Claude gets your ${n}; nothing is shown`, set: { nativeInput: 'Leave it alone' }, preview: lines(`❯ ${native.asked}`, `Claude gets: ${native.asked}`) },
+        { label: 'Off', about: 'Nothing above the prompt box, and no correction', set: { typingHelp: false }, preview: lines(`❯ ${native.asked}`, ['Nothing is shown as you type, and nothing is corrected.']) },
       ],
-      options,
-    ),
-    rowOf(
-      'corrections',
-      `${t}, typed`,
-      [
-        {
-          label: 'Corrected while typing and after',
-          about: 'A line above the prompt as you type, and one under your message',
-          set: { corrections: 'While typing and after sending' },
-          preview: lines([`FIX ▸ ${fixed}`], `❯ ${wrong}`, [`  ↳ ${fixed}`], `Claude gets: ${wrong}`),
-        },
-        { label: 'Corrected after sending', about: 'A line under your message once it is sent', set: { corrections: 'After sending' }, preview: lines(`❯ ${wrong}`, [`  ↳ ${fixed}`], `Claude gets: ${wrong}`) },
-        { label: 'Not corrected', about: 'Nothing is added', set: { corrections: 'Off' }, preview: lines(`❯ ${wrong}`, `Claude gets: ${wrong}`) },
-      ],
-      options,
-    ),
-    rowOf('mark', 'Mark', marks.map(mark => ({ label: mark, about: 'What you click to open a block', set: { mark }, preview: reply({ mark }) })), { ...options, mark: markNow }),
-    rowOf(
-      'markPosition',
-      'Mark beside',
-      [
-        { label: 'Last line', about: 'Beside the last line of a block', set: { markPosition: 'Last line' }, preview: lines(`  ${target.reply[0]}`, `${markNow} ${target.reply[1]}`, ['A block of two lines: the mark is beside the second.']) },
-        { label: 'First line', about: 'Beside the first line of a block', set: { markPosition: 'First line' }, preview: lines(`${markNow} ${target.reply[0]}`, `  ${target.reply[1]}`, ['A block of two lines: the mark is beside the first.']) },
-      ],
-      options,
-    ),
-    rowOf(
-      'markVisibility',
-      'Mark shows',
-      [
-        { label: 'On hover', about: 'Hidden until the pointer is on a block', set: { markVisibility: 'On hover' }, preview: lines(`  ${target.reply[0]}`, ['The mark appears while the pointer is on the block.']) },
-        { label: 'Always', about: 'Drawn beside every block, pointer or not', set: { markVisibility: 'Always' }, preview: lines(`${markNow} ${target.reply[0]}`, ['The mark is there at rest.']) },
-      ],
-      options,
-    ),
-    rowOf(
-      'translationStyle',
-      'Grey text',
-      [
-        { label: 'Grey italic', about: 'The second language slanted', set: { translationStyle: 'Faint italic' }, preview: reply({ translationStyle: 'Faint italic' }) },
-        { label: 'Grey', about: 'The second language upright', set: { translationStyle: 'Faint' }, preview: reply({ translationStyle: 'Faint' }) },
-      ],
-      options,
-    ),
-    rowOf(
-      'layout',
-      'Levels 2 and 3',
-      [
-        { label: 'Side by side', about: 'Two columns, in a wide window', set: { layout: 'Side by side' }, preview: reply({ layout: 'Side by side', ...both }) },
-        { label: 'One under the other', about: 'The second language under each block', set: { layout: 'Below' }, preview: reply({ layout: 'Below', ...both }) },
-      ],
-      options,
-      c => (c.label === 'One under the other' ? 'Below' : c.label),
-    ),
-    rowOf(
-      'allButtons',
-      'Open-all buttons',
-      [
-        { label: 'On', about: 'Two buttons at the end of a message', set: { allButtons: true }, preview: lines([`▸▸ ALL ${pair.native.tag} OPEN  ▾▾ ALL ${pair.native.tag} CLOSE`], ['At the end of a message with two blocks or more.']) },
-        { label: 'Off', about: 'No buttons at the end of a message', set: { allButtons: false }, preview: lines(['No buttons at the end of a message.']) },
-      ],
-      options,
-    ),
-    rowOf(
-      'typingPreview',
-      'Preview while typing',
-      [
-        { label: 'Off', about: 'Nothing above the prompt box as you type', set: { livePreview: false }, preview: lines(`❯ ${native.asked}`, ['Nothing is shown until you send.']) },
-        ...['0.3 s', '0.6 s', '1 s', '2 s'].map(wait => ({
-          label: `After ${wait}`,
-          about: `Made once you stop typing for ${wait}`,
-          set: { livePreview: true, previewDelay: wait },
-          preview: lines([`${pair.target.tag} ▸ ${target.asked}`], `❯ ${native.asked}`, [`One small model call each time you pause for ${wait}.`]),
-        })),
-      ],
-      options,
+      options.typingHelp === false ? 1 : 0,
     ),
   ]
 }

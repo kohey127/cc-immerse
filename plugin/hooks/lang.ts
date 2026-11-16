@@ -128,12 +128,26 @@ export function classify(text: string, pair: Pair): 'native' | 'target' | 'unsur
   return shared >= 2 ? 'target' : 'other'
 }
 
-/** Whether a chunk of a reply is in the learned language, and so worth offering a translation of. */
+/** Whether a language is written in Latin letters alone. */
+function isLatin(language: Language): boolean {
+  return language.scripts.every(script => script === 'latin')
+}
+
+/** Whether a chunk of a reply is in the pair's target language, and so worth offering a translation of. */
 export function isTargetText(text: string, pair: Pair): boolean {
   const { nativeOnly, targetOnly, shared, other } = tally(text, pair)
   const inTarget = targetOnly + shared
   if (inTarget < 4 || other > inTarget) return false
   const own = ownLetters(pair)
+  // One language in Latin letters, the other in letters of its own. Latin words stand in any language's
+  // prose (a command, a product, a branch), and the other's letters in Latin prose are rare. So the text is
+  // in the other language once its letters are a third of the Latin ones: "main ブランチでビルドが通りました"
+  // is Japanese, "the 設定 file is in the config folder" is English.
+  if (own.native && own.target && isLatin(pair.target) !== isLatin(pair.native)) {
+    const [latin, ownScript] = isLatin(pair.target) ? [targetOnly, nativeOnly] : [nativeOnly, targetOnly]
+    const isOwnScriptLanguage = ownScript >= Math.max(2, latin / 3)
+    return isLatin(pair.target) ? !isOwnScriptLanguage : isOwnScriptLanguage
+  }
   if (own.native && nativeOnly >= inTarget * 0.2) return false
   if (!own.native && own.target && targetOnly < 2) return false
   return true

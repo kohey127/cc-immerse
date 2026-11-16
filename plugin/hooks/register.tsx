@@ -3,9 +3,9 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Draft, Tr } from '../types'
 import { asText, fixSystem, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
-import { levelOf, samplesOf, settingsRows } from './menu'
+import { samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
-import { readSettings } from './settings'
+import { isWithClaudeInTarget, levelOf, readSettings } from './settings'
 import type { Settings } from './settings'
 import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, tableLines, widthOf, wrap } from './text'
 import type { Chunk, Piece } from './text'
@@ -31,7 +31,8 @@ let band = ''
 // that takes it sits in a column at the right. But a key pressed in the prompt box reaches `prompt.edit`:
 // an arrow does while the box holds more than one line, and Enter does where the caret stands after a
 // backslash, since there it breaks the line and sends nothing. So while the list is open the box holds
-// this line, ending in that backslash, between two empty ones, the caret at its end.
+// this line, ending in that backslash, between two empty ones, the caret at its end. The line says what
+// the keys do: the author tried the backslash alone and found it harder to understand.
 const HINT = '↑↓ move · Enter change · ← back · type to close'
 const HINT_LINE = `${HINT} \\`
 const HELD = `\n${HINT_LINE}\n`
@@ -49,11 +50,17 @@ function isHint(text: string): boolean {
 function withoutHint(text: string): string {
   return text.split(HINT_LINE).join('').split(HINT).join('')
 }
+
 let isActive = true
 
-/** The key a translation of `src` is kept under: by native language, so a changed setting translates afresh. */
-function trId(src: string): string {
-  return hash(`${pair.native.code}:${src}`)
+/** The pair the other way round: what a text in the native language is translated with, into the learned one. */
+function backPair(): Pair {
+  return { native: pair.target, target: pair.native }
+}
+
+/** The key a translation of `src` is kept under: by the language it is put into, so a changed setting translates afresh. */
+function trId(src: string, isToNative = true): string {
+  return hash(`${(isToNative ? pair.native : pair.target).code}:${src}`)
 }
 
 /** The key a correction of `text` is kept under: apart from its translation, and by pair. */
@@ -132,8 +139,8 @@ async function apply($: EngineInterface, values: Values): Promise<void> {
 }
 
 /** What `/immerse off` switches off, and so what `/immerse on` brings back. */
-const OFF: Values = { readingLevel: 'Off', nativeInput: 'Leave it alone', corrections: 'Off' }
-const ON: Values = { readingLevel: '4', nativeInput: 'Send in the language you are learning', corrections: 'While typing and after sending' }
+const OFF: Values = { readingLevel: 'Off', typingHelp: false }
+const ON: Values = { readingLevel: '4', typingHelp: true }
 
 /** `/immerse off`: all help off, what was set kept for `/immerse on`. */
 async function switchOff($: EngineInterface): Promise<void> {
@@ -155,7 +162,7 @@ async function switchOn($: EngineInterface): Promise<void> {
     const now = field === 'readingLevel' ? levelOf(stored) : stored[field]
     if (now !== OFF[field]) continue
     const was = before[field]
-    values[field] = (typeof was === 'string' || typeof was === 'boolean') && was !== OFF[field] ? was : (ON[field] as string)
+    values[field] = (typeof was === 'string' || typeof was === 'boolean') && was !== OFF[field] ? was : (ON[field] as string | boolean)
   }
   await apply($, values)
 }
@@ -276,8 +283,13 @@ async function previewTick($: EngineInterface): Promise<void> {
   }
 }
 
-/** One model call whose answer is kept under `id`: a translation of `src`, or with `system`, what that asks of it. */
-async function translate($: EngineInterface, src: string, id: string = trId(src), system?: string): Promise<void> {
+/**
+ * One model call whose answer is kept under `id`: a translation of `src`, or with `system`, what that asks
+ * of it. `isToNative`: into the native language (a reply in the learned one); false, into the learned one
+ * (a reply in the native one, which Claude writes when asked in it).
+ */
+async function translate($: EngineInterface, src: string, id: string = trId(src), system?: string, isToNative = true): Promise<void> {
+  const into = isToNative ? pair : backPair()
   const ref = { ...TR, id }
   const kept = (await $.state.get(ref)).value
   const now = await $.clock.now()
@@ -287,7 +299,7 @@ async function translate($: EngineInterface, src: string, id: string = trId(src)
   await $.state.set(ref, { status: 'pending', text: '', at: now })
   let next: Tr
   try {
-    const r = await $.model.complete({ model: 'haiku', system: system ?? (isTable(src) ? tableSystem(pair) : translateSystem(pair)), prompt: asText(src), maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
+    const r = await $.model.complete({ model: 'haiku', system: system ?? (isTable(src) ? tableSystem(into) : translateSystem(into)), prompt: asText(src), maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
     next = r.isAnswered ? { status: 'done', text: r.text.trim() } : { status: 'error', text: r.reason }
   } catch (err) {
     next = { status: 'error', text: (err instanceof Error ? err.message : String(err)).slice(0, 80) }
@@ -295,32 +307,32 @@ async function translate($: EngineInterface, src: string, id: string = trId(src)
   await $.state.set(ref, next)
 }
 
-/** One thing a press opens: a whole chunk (a paragraph, a list, a heading with its paragraph, a table). */
-type Unit = { k: number; text: string }
+/** One thing a press opens: a whole chunk (a paragraph, a list, a heading with its paragraph, a table). `isToNative`: its translation is into the native language. */
+type Unit = { k: number; text: string; isToNative: boolean }
 
-/** What a chunk offers to open: itself, when it is in the learned language. `inText`: the plugin draws its text. */
+/** What a chunk offers to open: itself, when it is in one of the pair's languages. `inText`: the plugin draws its text. */
 function offers(c: Chunk): (Unit & { inText: boolean })[] {
-  if (!c.isProse) return []
+  if (!c.isProse && !c.isNative) return []
   const hasCode = /^\s*(```|~~~)/m.test(c.src)
-  return [{ k: 0, text: c.src, inText: !c.isTable && !hasCode }]
+  return [{ k: 0, text: c.src, isToNative: c.isProse, inText: !c.isTable && !hasCode }]
 }
 
-async function setOpen($: EngineInterface, rowId: string, src: string, isOpen: boolean): Promise<void> {
+async function setOpen($: EngineInterface, rowId: string, u: Unit, isOpen: boolean): Promise<void> {
   await $.state.set({ ...OPEN, id: rowId }, isOpen)
   // Not awaited: a press has ten seconds, and a translation may take longer. The row redraws when it lands.
-  if (isOpen) $.clock.after(0, () => void translate($, src))
+  if (isOpen) $.clock.after(0, () => void translate($, u.text, trId(u.text, u.isToNative), undefined, u.isToNative))
 }
 
-async function toggle($: EngineInterface, rowId: string, src: string): Promise<void> {
+async function toggle($: EngineInterface, rowId: string, u: Unit): Promise<void> {
   const isOpen = (await $.state.get({ ...OPEN, id: rowId })).value ?? false
-  await setOpen($, rowId, src, !isOpen)
+  await setOpen($, rowId, u, !isOpen)
 }
 
 /** Opens (and translates) or closes everything one message offers. Returns how many. */
 async function setAll($: EngineInterface, requestId: string, chunks: readonly Chunk[], isOpen: boolean): Promise<number> {
   const work: Promise<void>[] = []
   chunks.forEach((c, i) => {
-    for (const u of offers(c)) work.push(setOpen($, `${requestId}:${i}:${u.k}`, u.text, isOpen))
+    for (const u of offers(c)) work.push(setOpen($, `${requestId}:${i}:${u.k}`, u, isOpen))
   })
   await Promise.all(work)
   return work.length
@@ -352,7 +364,7 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
   // A sample shows its mark at rest: nobody points at a preview.
   const isMarkHidden = settings.markShown === 'hover' && !sample
 
-  // Which language is read first. With the native one in front the two change places: the translation
+  // Which language is read first. A chunk in the other one changes places with its translation: the translation
   // is drawn as the reply and the reply's own text is what shows beside it, below it or behind the mark.
   const isNativeFront = settings.front === 'native'
   const behindTag = isNativeFront ? pair.target.tag : pair.native.tag
@@ -417,18 +429,20 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
       const u = offers(c)[0]
       const rowId = `${view.id}:${i}:0`
       const isOpen = u ? isAlways || (sample ? (sample.open[i] ?? false) : ((await $.state.get({ ...OPEN, id: rowId })).value ?? false)) : false
-      // With the native language in front the translation is the text read, so it is wanted at once.
-      const isWanted = Boolean(u) && (isOpen || isNativeFront)
-      const tr: Tr | null = !u || !isWanted ? null : sample ? { status: 'done', text: sample.translations[i] ?? '' } : ((await $.state.get({ ...TR, id: trId(u.text) })).value ?? null)
+      // A chunk in the language that is not read first changes places with its translation, which is then
+      // the text read and so wanted at once: an English reply at level 1, a Japanese one at level 4.
+      const needsSwap = Boolean(u) && u?.isToNative === isNativeFront
+      const isWanted = Boolean(u) && (isOpen || needsSwap)
+      const tr: Tr | null = !u || !isWanted ? null : sample ? { status: 'done', text: sample.translations[i] ?? '' } : ((await $.state.get({ ...TR, id: trId(u.text, u.isToNative) })).value ?? null)
       // Shown with no press: the translation is asked for as the chunk is drawn. Once asked, the state holds
       // it (pending, then done), so drawing the chunk again asks nothing.
-      if (u && (isAlways || isNativeFront) && !tr && !sample) $.clock.after(0, () => void translate($, u.text))
+      if (u && (isAlways || needsSwap) && !tr && !sample) $.clock.after(0, () => void translate($, u.text, trId(u.text, u.isToNative), undefined, u.isToNative))
       const done = tr?.status === 'done' ? tr.text : null
       // Until its translation arrives a chunk is read as written, with nothing to open yet.
-      const isSwapped = isNativeFront && done !== null
-      const isPressable = Boolean(u) && !isAlways && (!isNativeFront || isSwapped)
-      if (u && (!isNativeFront || isSwapped)) total++
-      if (u && isOpen && (!isNativeFront || isSwapped)) openTotal++
+      const isSwapped = needsSwap && done !== null
+      const isPressable = Boolean(u) && !isAlways && (!needsSwap || isSwapped)
+      if (u && (!needsSwap || isSwapped)) total++
+      if (u && isOpen && (!needsSwap || isSwapped)) openTotal++
 
       // A chunk the plugin draws itself can have the other language beside it; one the engine draws is too wide.
       const isBeside = isSide && Boolean(u?.inText)
@@ -438,7 +452,7 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
       let behind = null
       if (u && isOpen) {
         if (isSwapped) behind = u.inText ? <Box flexDirection="column">{lay(c.src, room).map(row => words(row, true))}</Box> : behindBlock(c.src, c.isTable)
-        else if (isNativeFront) behind = isAlways ? <Text dimColor>{tr?.status === 'error' ? `✗ ${tr.text}` : '…'}</Text> : null
+        else if (needsSwap) behind = isAlways ? <Text dimColor>{tr?.status === 'error' ? `✗ ${tr.text}` : '…'}</Text> : null
         else if (done !== null && c.isTable) behind = behindBlock(done, true)
         else
           behind = (
@@ -454,7 +468,7 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
         !isPressable || !u ? null : sample ? (
           <Text>{isOpen ? '▾' : settings.mark}</Text>
         ) : (
-          <Button key={`g${i}`} plain label={isOpen ? '▾' : settings.mark} onPress={() => toggle($, rowId, u.text)} />
+          <Button key={`g${i}`} plain label={isOpen ? '▾' : settings.mark} onPress={() => toggle($, rowId, u)} />
         )
       // Drawn over its gutter cell, so nothing moves; hidden until the pointer is on the chunk unless set to show always.
       const overCell = mark ? (
@@ -609,7 +623,7 @@ export const register: Register = (on, options) => {
     const arg = e.args.trim().toLowerCase()
     if (arg === '') {
       isMenuOpen = true
-      await $.state.set(MENU, { view: 'main', cursor: 'reading' })
+      await $.state.set(MENU, { view: 'main', cursor: 'level' })
       // After this answer is shown: the command's own line leaves the prompt box first.
       $.clock.after(0, () => void holdKeys($))
       return { text: 'Settings are above the prompt: ↑↓ move, Enter change, ← back.', isTextDisplayOnly: true }
@@ -618,12 +632,12 @@ export const register: Register = (on, options) => {
     if (arg === 'on' || arg === 'off') {
       if (arg === 'off') {
         await switchOff($)
-        return { text: 'Reading and writing help are off. /immerse on brings them back; /immerse shows the settings.', isTextDisplayOnly: true }
+        return { text: 'Immerse is off: the level is Off and typing help is off. /immerse on brings them back; /immerse shows the settings.', isTextDisplayOnly: true }
       }
       await switchOn($)
-      return { text: 'Reading and writing help are on. /immerse shows the settings.', isTextDisplayOnly: true }
+      return { text: 'Immerse is on. /immerse shows the settings.', isTextDisplayOnly: true }
     }
-    if (arg === 'open' && settings.show === 'never') return { text: 'Reading is off, so there is nothing to open. /immerse on brings it back.', isTextDisplayOnly: true }
+    if (arg === 'open' && settings.show === 'never') return { text: 'Reading is off (the level is Off), so there is nothing to open. /immerse on brings it back.', isTextDisplayOnly: true }
     if (arg !== 'open' && arg !== 'close') return { text: 'Usage: /immerse shows the settings. /immerse on, off: all help at once. /immerse open, close: the latest reply’s translations.', isTextDisplayOnly: true }
     // `close` closes everything on screen (no model call); `open` covers the latest reply alone.
     const isOff = arg === 'close'
@@ -657,7 +671,6 @@ export const register: Register = (on, options) => {
     }
     // The list's line left in the box with a message typed beside it is not part of the message.
     if (text.includes(HINT)) return next({ ...e, text: withoutHint(text).trim() })
-
     // A message is on its way: the settings list has done its work and gives the band back.
     if ((await $.state.get(MENU)).value) {
       isMenuOpen = false
@@ -681,7 +694,14 @@ export const register: Register = (on, options) => {
       return next(e)
     }
     await $.state.set({ ...SENT, id: hash(prepared.target) }, text)
-    return next({ ...e, text: prepared.target })
+    // The person's own words go with the message, beside it and not shown: Claude reads the learned-language
+    // version as the message and answers in that language, and has the original for what a translation loses.
+    // The last sentence is needed: with the original in view and nothing said, it answers in the original's language.
+    const original =
+      `The user is practising ${pair.target.name}. Their message in this turn is the ${pair.target.name} version of what they typed in ${pair.native.name}. ` +
+      `This is their original wording, given only so that its exact meaning is not lost:\n<original-message language="${pair.native.name}">\n${text}\n</original-message>\n` +
+      `Reply in ${pair.target.name}, the language of their message.`
+    return next({ ...e, text: prepared.target, context: [...(e.context ?? []), original] })
   })
 
   // While the person types, above the prompt box: a native-language draft's English (what Enter will send),
@@ -759,7 +779,7 @@ export const register: Register = (on, options) => {
     // A row with no number is set in by the width a number takes.
     const lead = (i: number): string => (i < 9 ? '' : '   ')
 
-    /** The preview of one choice: the sample reply as it would be drawn, or lines saying what happens. */
+    /** The preview of one choice: an exchange at a level, or lines saying what happens. */
     const preview = async (p: Preview) => {
       if (p.kind === 'lines') {
         return (
@@ -770,31 +790,42 @@ export const register: Register = (on, options) => {
           </Box>
         )
       }
-      const drawn = readSettings({ ...stored, ...p.options })
-      if (drawn.show === 'never') {
-        return (
-          <Box flexDirection="column">
-            {samples.target.reply.map(line => (
-              <Text>{`  ${line}`}</Text>
-            ))}
-          </Box>
-        )
-      }
-      return drawReply($, e, {
-        id: 'preview',
-        chunks: samples.target.reply.map(src => ({ src, isProse: true, isTable: false })),
-        columns: Math.min(columns, 100),
-        isFirstOfReply: false,
-        settings: drawn,
-        pair,
-        sample: { translations: samples.native.reply, open: [false, true] },
-      })
+      // An exchange: what is typed, what Claude gets, and its answer as the level draws it. With Claude in
+      // the learned language the answer is in it; in the native one, or with nothing done, Claude answers
+      // in the language it was asked in.
+      const isInTarget = isWithClaudeInTarget(p.level)
+      const drawn = readSettings({ ...stored, readingLevel: p.level })
+      const [said, other] = isInTarget ? [samples.target, samples.native] : [samples.native, samples.target]
+      const [n, t] = [pair.native.name, pair.target.name]
+      return (
+        <Box flexDirection="column">
+          <Text>{`❯ ${samples.native.asked}`}</Text>
+          {isInTarget && <Text dimColor>{`  ↳ ${samples.target.asked}`}</Text>}
+          <Text dimColor>{`Claude gets: ${isInTarget ? `${samples.target.asked}  (with your ${n} beside it, so no meaning is lost)` : samples.native.asked}`}</Text>
+          <Text dimColor>{`Claude answers in ${isInTarget ? t : n}${p.level === 'Off' ? ', and nothing is done to it' : ''}:`}</Text>
+          {drawn.show === 'never' ? (
+            <Box flexDirection="column">
+              {said.reply.map(line => (
+                <Text>{`  ${line}`}</Text>
+              ))}
+            </Box>
+          ) : (
+            await drawReply($, e, {
+              id: 'preview',
+              chunks: said.reply.map(src => ({ src, isProse: isInTarget, isNative: !isInTarget, isTable: false })),
+              columns: Math.min(columns, 100),
+              isFirstOfReply: false,
+              settings: drawn,
+              pair,
+              sample: { translations: other.reply, open: [false, true] },
+            })
+          )}
+        </Box>
+      )
     }
     const under = open?.choices.find(c => c.key === cursor) ?? rows.find(r => r.key === cursor)?.choices.find(c => c.isNow)
 
     const nameWidth = Math.max(...rows.map(r => widthOf(r.name))) + 3
-    // Whether every row under the other, with the preview, is more than the band may take.
-    const isShort = (e.props.maxRows ?? 99) < rows.length + 7
     const list = open ? (
       // A row's choices. A long list (the languages) goes in three columns, so that it fits the band.
       (() => {
@@ -837,22 +868,7 @@ export const register: Register = (on, options) => {
             />
           )
         }
-        // The band is at most half the terminal high. Where every row under the other would push the preview
-        // out of it, the six rows about the look of a reply stand in two columns.
-        const look = rows.filter(r => ['mark', 'markPosition', 'markVisibility', 'translationStyle', 'layout', 'allButtons'].includes(r.key))
-        if (!isShort) return <Box flexDirection="column">{rows.map(r => one(r, nameWidth))}</Box>
-        const before = rows.slice(0, rows.indexOf(look[0] as Row))
-        const after = rows.slice(rows.indexOf(look[look.length - 1] as Row) + 1)
-        return (
-          <Box flexDirection="column">
-            {before.map(r => one(r, nameWidth))}
-            <Box flexDirection="row" gap={4}>
-              <Box flexDirection="column">{look.slice(0, 3).map(r => one(r, nameWidth))}</Box>
-              <Box flexDirection="column">{look.slice(3).map(r => one(r, 19))}</Box>
-            </Box>
-            {after.map(r => one(r, nameWidth))}
-          </Box>
-        )
+        return <Box flexDirection="column">{rows.map(r => one(r, nameWidth))}</Box>
       })()
     )
 
@@ -865,7 +881,7 @@ export const register: Register = (on, options) => {
         </Box>
         {list}
         {under ? (
-          <Box flexDirection="column" marginTop={isShort ? 0 : 1}>
+          <Box flexDirection="column" marginTop={1}>
             <Text dimColor>{`Preview · ${open ? under.label : (rows.find(r => r.key === cursor)?.name ?? '')}${under.about === '' || !open ? '' : ` · ${under.about}`}`}</Text>
             <Box paddingLeft={2}>{await preview(under.preview)}</Box>
           </Box>
@@ -952,7 +968,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (settings.show === 'never' || e.props.isSummary || !(await isOn($))) return next(e)
     const chunks = split(e.props.text, pair)
-    if (!chunks.some(c => c.isProse)) return next(e)
+    if (!chunks.some(c => c.isProse || c.isNative)) return next(e)
     drawn.set(e.requestId, chunks)
     if (hasTurn && !before.has(e.requestId) && !recent.has(e.requestId)) {
       recent.set(e.requestId, chunks)

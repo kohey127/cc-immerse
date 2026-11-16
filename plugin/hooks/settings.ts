@@ -1,5 +1,11 @@
-// The settings: the plugin's options as the code uses them. Reading is Off or one of four levels; a
-// level is a preset that says which language is in front and when the other one shows. Writing is a switch. The other options each change one thing. Pure functions (tests/settings.test.ts).
+// The settings: the plugin's options as the code uses them. There is a level and one switch.
+//
+// A level says two things at once: in which language the person and Claude talk, and which language a
+// reply is read in first. Levels 1 and 2 are with Claude in the native language: what is typed is sent as
+// typed, Claude answers in it, and the learned language is the translation. Levels 3 and 4 are with Claude
+// in the learned language: what is typed in the native one is sent in the learned one, its original beside
+// it, and Claude answers in the learned one. The look of a reply is not a setting.
+// Pure functions (tests/settings.test.ts).
 
 export type Settings = {
   /** Which language a reply is read in first: the native one (levels 1 and 2) or the learned one (levels 3 and 4). */
@@ -28,41 +34,33 @@ export type Settings = {
 
 type Options = Readonly<Record<string, unknown>>
 
-/** What each reading level sets. `isBoth`: both languages show at once, laid out as the layout option says. */
-const READING: Record<string, { front: Settings['front']; isBoth: boolean }> = {
-  '1': { front: 'native', isBoth: false },
-  '2': { front: 'native', isBoth: true },
-  '3': { front: 'target', isBoth: true },
-  '4': { front: 'target', isBoth: false },
+/** The level as stored: Off, or 1 to 4; level 4 when nothing valid is stored. */
+export function levelOf(options: Options): string {
+  const level = String(options.readingLevel ?? '').trim()
+  return ['Off', '1', '2', '3', '4'].includes(level) ? level : '4'
 }
 
-const DEFAULT_LEVEL = '4'
-
-/** What an option's words name, or undefined for nothing or for words that name nothing. */
-function pick<T>(value: unknown, names: Readonly<Record<string, T>>): T | undefined {
-  return typeof value === 'string' ? names[value.trim()] : undefined
+/** Whether a level is with Claude in the learned language: what is typed in the native one is sent in it. */
+export function isWithClaudeInTarget(level: string): boolean {
+  return level === '3' || level === '4'
 }
 
 export function readSettings(options: Options): Settings {
-  const level = READING[String(options.readingLevel ?? '').trim()] ?? (READING[DEFAULT_LEVEL] as { front: Settings['front']; isBoth: boolean })
-  const layout = pick(options.layout, { 'Side by side': 'side', Below: 'below' } as const) ?? 'side'
-  const mark = typeof options.mark === 'string' && options.mark.trim() !== '' ? options.mark.trim() : '▸'
+  const level = levelOf(options)
+  const hasHelp = options.typingHelp !== false
   return {
-    front: level.front,
-    show: String(options.readingLevel ?? '').trim() === 'Off' ? 'never' : level.isBoth ? layout : 'request',
-    mark,
-    markAt: pick(options.markPosition, { 'Last line': 'last', 'First line': 'first' } as const) ?? 'last',
-    markShown: pick(options.markVisibility, { 'On hover': 'hover', Always: 'always' } as const) ?? 'hover',
-    style: pick(options.translationStyle, { 'Faint italic': 'faint-italic', Faint: 'faint' } as const) ?? 'faint-italic',
-    hasAllButtons: typeof options.allButtons === 'boolean' ? options.allButtons : true,
-    send:
-      (pick(options.nativeInput, {
-          'Send in the language you are learning': 'target',
-          'Show it, send as typed': 'preview',
-          'Leave it alone': 'off',
-        } as const) ?? 'target'),
-    hasPreview: options.livePreview !== false,
-    previewDelayMs: pick(options.previewDelay, { '0.3 s': 300, '0.6 s': 600, '1 s': 1000, '2 s': 2000 } as const) ?? 600,
-    correct: (pick(options.corrections, { 'While typing and after sending': 'both', 'After sending': 'sent', Off: 'off' } as const) ?? 'both'),
+    front: level === '1' || level === '2' ? 'native' : 'target',
+    show: level === 'Off' ? 'never' : level === '2' || level === '3' ? 'side' : 'request',
+    mark: '▸',
+    markAt: 'last',
+    markShown: 'hover',
+    style: 'faint-italic',
+    hasAllButtons: true,
+    // With Claude in the learned language the message is sent in it whatever the switch says: the level is
+    // the promise. Elsewhere the learned-language version is only shown, as help.
+    send: isWithClaudeInTarget(level) ? 'target' : hasHelp ? 'preview' : 'off',
+    hasPreview: hasHelp,
+    previewDelayMs: 600,
+    correct: hasHelp ? 'both' : 'off',
   }
 }

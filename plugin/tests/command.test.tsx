@@ -38,72 +38,69 @@ test('before /immerse the band holds nothing of the settings', async ($, on) => 
   await ui.unmount()
 })
 
-test('/immerse lists every setting above the prompt, a row each, its value beside its name', async ($, on) => {
+test('/immerse lists the four settings above the prompt, a row each, its value beside its name', async ($, on) => {
   const { immerse } = world(on)
   await immerse($, '')
   const ui = await $.ui.mount(BAND)
   const rows = await labels(ui)
-  expect(rows.length).toBe(13)
+  expect(rows.length).toBe(5)
   expect(rows[0]).toContain('Close')
-  rows.shift()
-  expect(rows[2]).toContain('Reading')
-  expect(rows[2]).toContain('Level 4 · English first, Japanese on click')
-  expect(rows[3]).toContain('Japanese, typed')
-  expect(rows[3]).toContain('Sent as English')
+  expect(rows[1]).toContain('Your language')
+  expect(rows[3]).toContain('Level')
+  expect(rows[3]).toContain('Level 4 · With Claude in English')
+  expect(rows[4]).toContain('Help while typing')
   // The keyboard's row is marked, and the preview is of that row.
-  expect(rows[2]?.includes('❯')).toBe(true)
-  expect(await ui.find({ type: 'Text', text: /^Preview · Reading/ })).toBeDefined()
+  expect(rows[3]?.includes('❯')).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /^Preview · Level/ })).toBeDefined()
+  expect((await ui.findAll({ type: 'Button' })).map((b: any) => b.props.hotkey)).toEqual(['0', '1', '2', '3', '4'])
   await ui.unmount()
 })
 
-test('the first nine rows are pressed by a number, and Close by 0', async ($, on) => {
+test('the preview of a level is an exchange at that level: what is typed, what Claude gets, how the reply is read', async ($, on) => {
   const { immerse } = world(on)
   await immerse($, '')
   const ui = await $.ui.mount(BAND)
-  const buttons = await ui.findAll({ type: 'Button' })
-  expect(buttons.map((b: any) => b.props.hotkey)).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', undefined, undefined, undefined])
+  // Level 4, in force: the message is sent in English with the Japanese beside it, and Claude answers in English.
+  expect(await ui.find({ type: 'Text', text: '❯ ビルドの状態は？' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Claude gets: What is the build status\?/ })).toBeDefined()
+  expect(Boolean((await ui.find({ type: 'Text', text: /The build passed/ }))?.props.dimColor)).toBe(false)
+  await ui.press({ key: 'level' })
+  await $.ui.focus({ component: 'AbovePrompt', requestId: 'above-prompt', element: 'level-2', origin: { kind: 'person' } } as never)
+  // Level 2: sent as typed, Claude answers in Japanese, the English beside it, faint.
+  expect(await ui.find({ type: 'Text', text: 'Claude gets: ビルドの状態は？' })).toBeDefined()
+  const texts = await ui.findAll({ type: 'Text' })
+  const native = texts.findIndex((t: any) => /ビルド成功です/.test(t.text) && t.props.dimColor !== true)
+  const learned = texts.findIndex((t: any) => /The build passed/.test(t.text) && t.props.dimColor === true)
+  expect(native).toBeGreaterThanOrEqual(0)
+  expect(learned).toBeGreaterThan(native)
   await ui.unmount()
 })
 
-test('Enter on Reading shows its choices in place, the one in force marked; a pick writes it and returns to the list', async ($, on) => {
+test('Enter on Level shows its choices in place, the one in force marked; a pick writes it and returns to the list', async ($, on) => {
   const { seen, immerse } = world(on)
   await immerse($, '')
   const ui = await $.ui.mount(BAND)
-  await ui.press({ key: 'reading' })
+  await ui.press({ key: 'level' })
   const choices = await labels(ui)
   expect(choices.length).toBe(6)
   expect(choices[0]).toContain('← Back')
-  expect(choices[5]).toContain('● Level 4')
   expect(choices[1]).toContain('○ Off')
   expect(choices[3]).toContain('○ Level 2')
-  expect(choices[3]).toContain('Japanese on the left, English beside it in grey')
-  await ui.press({ key: 'reading-2' })
+  expect(choices[3]).toContain('With Claude in Japanese')
+  expect(choices[5]).toContain('● Level 4')
+  await ui.press({ key: 'level-2' })
   expect(seen.set).toEqual([{ key: 'cc-immerse.readingLevel', value: '2' }])
-  expect((await labels(ui)).length).toBe(13)
+  expect((await labels(ui)).length).toBe(5)
   await ui.unmount()
 })
 
-test('a row of two choices flips where it is', async ($, on) => {
+test('Help while typing flips where it is', async ($, on) => {
   const { seen, immerse } = world(on)
   await immerse($, '')
   const ui = await $.ui.mount(BAND)
-  await ui.press({ key: 'allButtons' })
-  await ui.press({ key: 'markPosition' })
-  expect(seen.set).toEqual([
-    { key: 'cc-immerse.allButtons', value: false },
-    { key: 'cc-immerse.markPosition', value: 'First line' },
-  ])
-  expect((await labels(ui)).length).toBe(13)
-  await ui.unmount()
-})
-
-test('a choice that sets two things writes both: the preview while typing', async ($, on) => {
-  const { seen, immerse } = world(on)
-  await immerse($, '')
-  const ui = await $.ui.mount(BAND)
-  await ui.press({ key: 'typingPreview' })
-  await ui.press({ key: 'typingPreview-4' })
-  expect(seen.set).toEqual([{ key: 'cc-immerse.previewDelay', value: '2 s' }])
+  await ui.press({ key: 'typingHelp' })
+  expect(seen.set).toEqual([{ key: 'cc-immerse.typingHelp', value: false }])
+  expect((await labels(ui)).length).toBe(5)
   await ui.unmount()
 })
 
@@ -112,36 +109,10 @@ test('the languages are all in the list, with no typing', async ($, on) => {
   await immerse($, '')
   const ui = await $.ui.mount(BAND)
   await ui.press({ key: 'native' })
-  const choices = await labels(ui)
-  expect(choices.length).toBe(22)
+  expect((await labels(ui)).length).toBe(22)
   const korean = (await ui.findAll({ type: 'Button' })).find((b: any) => String(b.props.label).includes('Korean'))
   await ui.press({ key: korean?.key as string })
   expect(seen.set).toEqual([{ key: 'cc-immerse.nativeLanguage', value: 'Korean' }])
-  await ui.unmount()
-})
-
-test('the preview follows the keyboard: on a level, the sample reply as that level draws it', async ($, on) => {
-  const { immerse } = world(on)
-  await immerse($, '')
-  const ui = await $.ui.mount(BAND)
-  await ui.press({ key: 'reading' })
-  await $.ui.focus({ component: 'AbovePrompt', requestId: 'above-prompt', element: 'reading-2', origin: { kind: 'person' } } as never)
-  const texts = await ui.findAll({ type: 'Text' })
-  const native = texts.findIndex((t: any) => /ビルド成功です/.test(t.text) && t.props.dimColor !== true)
-  const learned = texts.findIndex((t: any) => /The build passed/.test(t.text) && t.props.dimColor === true)
-  expect(native).toBeGreaterThanOrEqual(0)
-  expect(learned).toBeGreaterThan(native)
-  expect(await ui.find({ type: 'Text', text: /^Preview · Level 2/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('the preview of a typing choice says what Claude gets', async ($, on) => {
-  const { immerse } = world(on)
-  await immerse($, '')
-  const ui = await $.ui.mount(BAND)
-  await ui.press({ key: 'nativeInput' })
-  await $.ui.focus({ component: 'AbovePrompt', requestId: 'above-prompt', element: 'nativeInput-1', origin: { kind: 'person' } } as never)
-  expect(await ui.find({ type: 'Text', text: 'Claude gets: ビルドの状態は？' })).toBeDefined()
   await ui.unmount()
 })
 
@@ -156,29 +127,25 @@ test('Close takes the list away', async ($, on) => {
 
 // --- the shortcuts ----------------------------------------------------------------------------------
 
-test('/immerse off switches all three kinds of help off', { options: { readingLevel: '2' } }, async ($, on) => {
+test('/immerse off sets the level to Off and typing help off', { options: { readingLevel: '2' } }, async ($, on) => {
   const { seen, immerse } = world(on)
   await immerse($, 'off')
   expect(seen.set).toEqual([
     { key: 'cc-immerse.readingLevel', value: 'Off' },
-    { key: 'cc-immerse.nativeInput', value: 'Leave it alone' },
-    { key: 'cc-immerse.corrections', value: 'Off' },
+    { key: 'cc-immerse.typingHelp', value: false },
   ])
 })
 
-const ALL_OFF = { readingLevel: 'Off', nativeInput: 'Leave it alone', corrections: 'Off' }
-
-test('/immerse on brings back what /immerse off switched off, as it was', { options: ALL_OFF }, async ($, on) => {
-  const { seen, immerse } = world(on, { beforeOff: { readingLevel: '2', nativeInput: 'Show it, send as typed', corrections: 'After sending' } })
+test('/immerse on brings back what /immerse off switched off, as it was', { options: { readingLevel: 'Off', typingHelp: false } }, async ($, on) => {
+  const { seen, immerse } = world(on, { beforeOff: { readingLevel: '2', typingHelp: true } })
   await immerse($, 'on')
   expect(seen.set).toEqual([
     { key: 'cc-immerse.readingLevel', value: '2' },
-    { key: 'cc-immerse.nativeInput', value: 'Show it, send as typed' },
-    { key: 'cc-immerse.corrections', value: 'After sending' },
+    { key: 'cc-immerse.typingHelp', value: true },
   ])
 })
 
-test('/immerse on with nothing remembered brings back the defaults, and leaves alone what is on', { options: { readingLevel: 'Off', corrections: 'After sending' } }, async ($, on) => {
+test('/immerse on with nothing remembered brings back level 4, and leaves alone what is on', { options: { readingLevel: 'Off' } }, async ($, on) => {
   const { seen, immerse } = world(on)
   await immerse($, 'on')
   expect(seen.set).toEqual([{ key: 'cc-immerse.readingLevel', value: '4' }])
@@ -192,31 +159,11 @@ test('with reading Off, /immerse open says so', { options: { readingLevel: 'Off'
   expect(JSON.stringify(await immerse($, 'open'))).toContain('Reading is off')
 })
 
-test('in a short band the six rows about the look stand in two columns, so the preview stays in view', async ($, on) => {
-  const { immerse } = world(on)
-  await immerse($, '')
-  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 17 } })
-  expect((await labels(ui)).length).toBe(13)
-  expect(await ui.find({ type: 'Text', text: /^Preview · Reading/ })).toBeDefined()
-  await ui.unmount()
-})
-
-test('sending a message takes the list away', async ($, on) => {
-  const { immerse } = world(on)
-  mock.clock(on)
-  on('model.complete', () => ({ value: { isAnswered: true as const, text: 'OK', usage: { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } } }))
-  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
-  await immerse($, '')
-  await $.prompt.submit({ text: 'What is the build status?' } as never)
-  const ui = await $.ui.mount(BAND)
-  expect((await ui.findAll({ type: 'Button' })).length).toBe(0)
-  await ui.unmount()
-})
-
 // --- the list worked from the prompt box ---------------------------------------------------------------
 // The band cannot be given the keyboard, so while the list is open the prompt box holds one line between two
 // empty ones, ending in a backslash with the caret after it: an arrow pressed there reaches the plugin as an
-// edit, and so does Enter, which after a backslash breaks the line and sends nothing.
+// edit, and so does Enter, which after a backslash breaks the line and sends nothing. The line says what the
+// keys do.
 
 const HINT = '↑↓ move · Enter change · ← back · type to close'
 const HINT_LINE = `${HINT} \\`
@@ -255,7 +202,7 @@ function keyboard(on: any) {
 
 const cursorRow = async (ui: any): Promise<string> => (await labels(ui)).find(l => l.includes('❯')) ?? ''
 
-test('/immerse puts its line in the prompt box, the caret on it, so that the arrows land there', async ($, on) => {
+test('/immerse puts its line in the prompt box, the caret at its end, so that the arrows and Enter land there', async ($, on) => {
   const { filled, start } = keyboard(on)
   const ui = await start($)
   expect(filled).toEqual([{ text: HELD, cursor: CARET }])
@@ -265,11 +212,11 @@ test('/immerse puts its line in the prompt box, the caret on it, so that the arr
 test('Down and Up in the prompt box move through the rows, the preview with them, and the box stays as it was', async ($, on) => {
   const { press, start } = keyboard(on)
   const ui = await start($)
-  expect(await cursorRow(ui)).toContain('Reading')
+  expect(await cursorRow(ui)).toContain('Level')
   const box = await press($, 'down')
   expect(box).toEqual({ text: HELD, cursor: CARET })
-  expect(await cursorRow(ui)).toContain('Japanese, typed')
-  expect(await ui.find({ type: 'Text', text: /^Preview · Japanese, typed/ })).toBeDefined()
+  expect(await cursorRow(ui)).toContain('Help while typing')
+  expect(await ui.find({ type: 'Text', text: /^Preview · Help while typing/ })).toBeDefined()
   await press($, 'up')
   await press($, 'up')
   expect(await cursorRow(ui)).toContain('You are learning')
@@ -282,7 +229,7 @@ test('the rows wrap: Up from the first is the last', async ($, on) => {
   await press($, 'up')
   await press($, 'up')
   await press($, 'up')
-  expect(await cursorRow(ui)).toContain('Preview while typing')
+  expect(await cursorRow(ui)).toContain('Help while typing')
   await ui.unmount()
 })
 
@@ -298,7 +245,7 @@ test('Enter shows the row’s choices; Enter on one writes it and sends nothing'
   expect(await cursorRow(ui)).toContain('Level 2')
   await press($, 'return')
   expect(seen.set).toEqual([{ key: 'cc-immerse.readingLevel', value: '2' }])
-  expect((await labels(ui)).length).toBe(13)
+  expect((await labels(ui)).length).toBe(5)
   await ui.unmount()
 })
 
@@ -307,8 +254,8 @@ test('Left goes back from a row’s choices, and from the list it closes it and 
   const ui = await start($)
   await press($, 'right')
   await press($, 'left')
-  expect((await labels(ui)).length).toBe(13)
-  expect(await cursorRow(ui)).toContain('Reading')
+  expect((await labels(ui)).length).toBe(5)
+  expect(await cursorRow(ui)).toContain('Level')
   await press($, 'left')
   expect((await labels(ui)).length).toBe(0)
   await ui.unmount()
@@ -318,8 +265,8 @@ test('Left goes back from a row’s choices, and from the list it closes it and 
 test('a number presses the row beside it', async ($, on) => {
   const { seen, press, start } = keyboard(on)
   const ui = await start($)
-  await press($, '7', '7')
-  expect(seen.set).toEqual([{ key: 'cc-immerse.markPosition', value: 'First line' }])
+  await press($, '4', '4')
+  expect(seen.set).toEqual([{ key: 'cc-immerse.typingHelp', value: false }])
   await press($, '3', '3')
   expect((await labels(ui))[0]).toContain('← Back')
   await press($, '2', '2')
@@ -334,18 +281,6 @@ test('anything else typed is the start of a message: the list goes, and the box 
   expect(box.text).toBe('w')
   expect((await labels(ui)).length).toBe(0)
   await ui.unmount()
-})
-
-test('the list’s line is never sent to Claude, even with the list gone', async ($, on) => {
-  const { enter } = keyboard(on)
-  const sent = await enter($)
-  expect(sent.drop).toBe('')
-})
-
-test('the list’s line left in the box beside a message is taken out of what is sent', async ($, on) => {
-  keyboard(on)
-  const sent = await $.prompt.submit({ text: `What is the build status?${HINT_LINE}` } as never)
-  expect(sent.text).toBe('What is the build status?')
 })
 
 test('closing the list empties the prompt box', async ($, on) => {
@@ -363,4 +298,11 @@ test('regression: a message typed fast or pasted over the open list arrives as o
   const box = await ($ as any).prompt.edit({ origin: { kind: 'composer' }, text: HELD, cursor: CARET, start: CARET, end: CARET, inputText: 'What is the build status?' })
   expect(box.text).toBe('What is the build status?')
   await ui.unmount()
+})
+
+test('the list’s line is never sent to Claude: alone it is dropped, and beside a message it is taken out', async ($, on) => {
+  const { enter } = keyboard(on)
+  expect((await enter($)).drop).toBe('')
+  const sent = await ($ as any).prompt.submit({ text: `What is the build status?${HINT_LINE}` })
+  expect(sent.text).toBe('What is the build status?')
 })

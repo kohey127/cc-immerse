@@ -4,8 +4,12 @@
 import { classify, isTargetText } from './lang'
 import type { Pair } from './lang'
 
-/** `isProse`: text in the learned language, worth a translation. `isTable`: it is a Markdown table, translated and drawn as one. */
-export type Chunk = { src: string; isProse: boolean; isTable: boolean }
+/**
+ * `isProse`: text in the learned language. `isNative`: text in the native language, which Claude answers in
+ * when asked in it. Either is worth a translation into the other. `isTable`: it is a Markdown table,
+ * translated and drawn as one.
+ */
+export type Chunk = { src: string; isProse: boolean; isNative?: boolean; isTable: boolean }
 
 export function isTable(src: string): boolean {
   return /^\s*\|.*\|\s*$/m.test(src)
@@ -112,7 +116,12 @@ export function split(text: string, pair: Pair): Chunk[] {
       i++
     } else merged.push(block)
   }
-  return merged.map(src => ({ src, isProse: isProse(src, pair), isTable: isTable(src) }))
+  // The pair the other way round asks the same question of the native language.
+  const back: Pair = { native: pair.target, target: pair.native }
+  return merged.map(src => {
+    const inTarget = isProse(src, pair)
+    return { src, isProse: inTarget, isNative: !inTarget && isProse(src, back), isTable: isTable(src) }
+  })
 }
 
 /** How many letters a typed message has outside its code spans: a word or two is not judged. */
