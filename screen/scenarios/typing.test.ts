@@ -1,4 +1,4 @@
-// Recordings 3 and 4 of the README: a message typed in Japanese is previewed and sent in English;
+// Recordings 3 and 4 of the README, at level 4: a message typed in Japanese is previewed and sent in English;
 // a message typed in English with a mistake is sent as typed and corrected under it.
 
 import { expect, setDefaultTimeout, test } from 'bun:test'
@@ -17,8 +17,11 @@ test('Japanese: the preview shows the English, Enter sends the English, ↳ show
     const message = screen.findIndex(line => line.startsWith('❯') && line.includes(typed))
     expect(message).toBeGreaterThanOrEqual(0)
     expect(screen[message + 1]?.trimEnd()).toBe(`  ↳ ${english}`)
-    expect(s.model.turns[0]).toContain(english)
-    expect(s.model.turns[0]).not.toContain(typed)
+    // Claude gets the English as the message, and the person's own words beside it so that no meaning is lost.
+    const blocks = (s.model.requests[0] ?? []).flatMap(m => ((m as { content?: unknown }).content as { text?: string }[] | undefined) ?? []).map(b => b.text ?? '')
+    expect(blocks).toContain(english)
+    expect(blocks.some(b => b.includes('<original-message') && b.includes(typed) && b.includes('Reply in English'))).toBe(true)
+    expect(blocks).not.toContain(typed)
     expect(s.model.unscripted).toEqual([])
   } finally {
     await s.close()

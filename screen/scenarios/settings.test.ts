@@ -16,6 +16,9 @@ const ASKED = 'What is the build status?'
 
 setDefaultTimeout(180000)
 
+/** The row of the prompt box that holds the list's line: what the keys do, ending in the backslash. */
+const HELD_ROW = /type to close \\\s*$/
+
 function session(record?: string, options: Record<string, string | boolean> = {}): Promise<Session> {
   return open({
     cols: 150,
@@ -33,7 +36,7 @@ async function command(s: Session, text: string, answer: string | RegExp): Promi
   await s.press('Enter')
   await s.waitFor(answer)
   // The list takes its keys through the prompt box: wait for its line to be there.
-  if (text === '/immerse') await s.waitFor('type to close')
+  if (text === '/immerse') await s.waitFor(HELD_ROW)
   await Bun.sleep(700)
 }
 
@@ -61,31 +64,36 @@ test('/immerse, keyboard only: the list, the preview following the keyboard, a l
     let rows = await list(s)
     // Full width, from the left edge: nothing of it beside the conversation.
     expect(rows[0]?.startsWith('Immerse settings')).toBe(true)
-    for (const name of ['Your language', 'You are learning', 'Reading', 'Japanese, typed', 'English, typed', 'Mark beside', 'Grey text', 'Open-all buttons', 'Preview while typing']) expect({ name, isListed: rowOf(rows, name) !== '' }).toEqual({ name, isListed: true })
-    expect(rowOf(rows, 'Reading')).toContain('Level 4 · English first, Japanese on click')
-    expect(rowOf(rows, 'Japanese, typed')).toContain('Sent as English')
-    expect(rows.some(line => line.startsWith('Preview · Reading'))).toBe(true)
+    for (const name of ['Your language', 'You are learning', 'Level', 'Help while typing']) expect({ name, isListed: rowOf(rows, name) !== '' }).toEqual({ name, isListed: true })
+    // The row says in which language the person and Claude talk; the preview shows that exchange.
+    expect(rowOf(rows, 'Level  ')).toContain('Level 4 · With Claude in English')
+    expect(rows.some(line => line.startsWith('Preview · Level'))).toBe(true)
+    expect(rows.some(line => line.includes('Claude gets: What is the build status?'))).toBe(true)
+    expect(rows.some(line => line.includes('Claude answers in English'))).toBe(true)
     await s.shot('settings-1-list')
 
-    // The prompt box holds the list's line, so the arrows are the list's at once: the preview follows a row down.
-    await s.waitFor('↑↓ move · Enter change · ← back · type to close')
+    // The prompt box holds the list's line, so the arrows and Enter are the list's at once.
+    await s.waitFor(HELD_ROW)
     await keys(s, 'Down')
     rows = await list(s)
-    expect(rowOf(rows, 'Japanese, typed')).toContain('❯')
-    expect(rows.some(line => line.startsWith('Preview · Japanese, typed'))).toBe(true)
-    expect(rows.some(line => line.includes('Claude gets: What is the build status?'))).toBe(true)
+    expect(rowOf(rows, 'Help while typing')).toContain('❯')
+    expect(rows.some(line => line.startsWith('Preview · Help while typing'))).toBe(true)
 
-    // Reading: its choices in place, the keyboard on the one in force.
+    // Level: its choices in place, the keyboard on the one in force.
     await keys(s, 'Up', 'Enter')
     rows = await list(s)
-    expect(rows[0]).toContain('Immerse settings › Reading')
+    expect(rows[0]).toContain('Immerse settings › Level')
     expect(rowOf(rows, 'Level 4')).toContain('❯ ●')
     await s.shot('settings-2-reading')
 
-    // Up two rows: level 2, and the preview is the sample at level 2, the two languages side by side.
+    // Up two rows: level 2, and the preview is the exchange at level 2: sent as typed, Claude answers in
+    // Japanese, and the two languages are side by side.
     await keys(s, 'Up', 'Up')
     rows = await list(s)
     expect(rowOf(rows, 'Level 2')).toContain('❯ ○')
+    expect(rowOf(rows, 'Level 2')).toContain('With Claude in Japanese')
+    expect(rows.some(line => line.includes('Claude gets: ビルドの状態は？'))).toBe(true)
+    expect(rows.some(line => line.includes('Claude answers in Japanese'))).toBe(true)
     const sample = rowOf(rows, 'ビルド成功です。')
     expect(sample.indexOf('ビルド成功です。')).toBeLessThan(sample.indexOf('The build passed.'))
     expect(sample.indexOf('The build passed.')).toBeGreaterThan(0)
@@ -95,10 +103,10 @@ test('/immerse, keyboard only: the list, the preview following the keyboard, a l
     await keys(s, 'Enter')
     await Bun.sleep(2500)
     rows = await list(s)
-    expect(rows[0]).not.toContain('›  Reading')
-    expect(rowOf(rows, 'Reading')).toContain('Level 2 · Japanese on the left, English beside it in grey')
+    expect(rows[0]).not.toContain('› Level')
+    expect(rowOf(rows, 'Level  ')).toContain('Level 2 · With Claude in Japanese')
     await keys(s, 'Down')
-    expect(rowOf(await list(s), 'Japanese, typed')).toContain('❯')
+    expect(rowOf(await list(s), 'Help while typing')).toContain('❯')
     await s.shot('settings-4-picked')
 
     // Typing a message takes the list away, the list's line with it, and the reply is at level 2.
@@ -118,20 +126,20 @@ test('/immerse, keyboard only: the list, the preview following the keyboard, a l
   }
 })
 
-test('numbers: 3 shows Reading, 2 picks level 1, 0 closes', async () => {
+test('numbers: 3 shows the levels, 2 picks level 1, 0 closes', async () => {
   const s = await session()
   try {
     await command(s, '/immerse', 'Immerse settings')
     await keys(s, '3')
-    expect((await list(s))[0]).toContain('Immerse settings › Reading')
+    expect((await list(s))[0]).toContain('Immerse settings › Level')
     await keys(s, '2')
     await Bun.sleep(2500)
-    expect(rowOf(await list(s), 'Reading')).toContain('Level 1 · Japanese first, English on click')
+    expect(rowOf(await list(s), 'Level  ')).toContain('Level 1 · With Claude in Japanese')
     await keys(s, '0')
     expect(await list(s)).toEqual([])
     // The numbers were taken by the list, not typed into the prompt box, which is empty again.
     const screen = await s.screen()
-    expect(screen.some(line => /^❯ \d/.test(line) || line.includes('type to close'))).toBe(false)
+    expect(screen.some(line => /^❯ \d/.test(line) || HELD_ROW.test(line))).toBe(false)
   } finally {
     await s.close()
   }
@@ -141,9 +149,9 @@ test('a switch flips where it is, and a language is picked from the list of all 
   const s = await session()
   try {
     await command(s, '/immerse', 'Immerse settings')
-    await keys(s, '7')
+    await keys(s, '4')
     await Bun.sleep(2500)
-    expect(rowOf(await list(s), 'Mark beside')).toContain('First line')
+    expect(rowOf(await list(s), 'Help while typing')).toContain('Off')
     await keys(s, '1')
     const languages = await list(s)
     expect(languages[0]).toContain('Immerse settings › Your language')
@@ -153,7 +161,6 @@ test('a switch flips where it is, and a language is picked from the list of all 
     await Bun.sleep(2500)
     const rows = await list(s)
     expect(rowOf(rows, 'Your language')).toContain('Korean')
-    expect(rowOf(rows, 'Korean, typed')).not.toBe('')
   } finally {
     await s.close()
   }
@@ -165,9 +172,9 @@ test('regression: /immerse open finds the latest reply after /immerse off and /i
   const s = await session()
   try {
     await s.ask(ASKED, 'FIX ▸')
-    await command(s, '/immerse off', 'help are off')
+    await command(s, '/immerse off', 'Immerse is off')
     await Bun.sleep(3500)
-    await command(s, '/immerse on', 'help are on')
+    await command(s, '/immerse on', 'Immerse is on')
     await Bun.sleep(3500)
     await command(s, '/immerse open', /Opened \d+ block|No reply to open/)
     expect(await s.rowOf('Opened 2 block')).toBeGreaterThanOrEqual(0)
@@ -178,9 +185,9 @@ test('regression: /immerse open finds the latest reply after /immerse off and /i
 })
 
 test('/immerse off lands every one of its writes, and /immerse on brings back what was set', async () => {
-  const s = await session(undefined, { readingLevel: '2', corrections: 'After sending' })
+  const s = await session(undefined, { readingLevel: '2' })
   try {
-    await command(s, '/immerse off', 'help are off')
+    await command(s, '/immerse off', 'Immerse is off')
     await Bun.sleep(3500)
     await s.type(ASKED)
     await Bun.sleep(2500)
@@ -188,39 +195,34 @@ test('/immerse off lands every one of its writes, and /immerse on brings back wh
     await s.press('Ctrl+U')
     await command(s, '/immerse', 'Immerse settings')
     let rows = await list(s)
-    expect(rowOf(rows, 'Reading')).toContain('Off')
-    expect(rowOf(rows, 'Japanese, typed')).toContain('Left alone')
-    expect(rowOf(rows, 'English, typed')).toContain('Not corrected')
+    expect(rowOf(rows, 'Level  ')).toContain('Off')
+    expect(rowOf(rows, 'Help while typing')).toContain('Off')
     await keys(s, '0')
-    await command(s, '/immerse on', 'help are on')
+    await command(s, '/immerse on', 'Immerse is on')
     await Bun.sleep(3500)
     await command(s, '/immerse', 'Immerse settings')
     rows = await list(s)
-    expect(rowOf(rows, 'Reading')).toContain('Level 2')
-    expect(rowOf(rows, 'Japanese, typed')).toContain('Sent as English')
-    expect(rowOf(rows, 'English, typed')).toContain('Corrected after sending')
+    expect(rowOf(rows, 'Level  ')).toContain('Level 2 · With Claude in Japanese')
+    expect(rowOf(rows, 'Help while typing')).toContain('On')
   } finally {
     await s.close()
   }
 })
 
-test('which language Claude gets, changed in the list: after "English shown, sent as typed", a Japanese message arrives in Japanese', async () => {
+test('which language Claude gets, changed in the list: after level 1 is picked, a Japanese message arrives in Japanese, with nothing beside it', async () => {
   const typed = 'ビルドの状態を教えてください。'
   const english = 'Tell me the status of the build.'
-  const s = await open({ cols: 150, rows: 44, script: { replies: ['The build passed.', 'The build passed.'], small: { toTarget: { [typed]: english }, translate: {} }, smallDelayMs: 300 } })
+  const s = await open({ cols: 150, rows: 44, script: { replies: ['ビルドは通りました。', 'ビルドは通りました。'], small: { toTarget: { [typed]: english } }, smallDelayMs: 300 } })
   try {
     await command(s, '/immerse', 'Immerse settings')
-    await keys(s, '4')
-    const choices = await list(s)
-    expect(choices[0]).toContain('Immerse settings › Japanese, typed')
-    expect(rowOf(choices, 'Sent as English')).toContain('●')
-    await keys(s, '2')
+    await keys(s, '3', '2')
     await Bun.sleep(2500)
-    expect(rowOf(await list(s), 'Japanese, typed')).toContain('English shown, sent as typed')
+    expect(rowOf(await list(s), 'Level  ')).toContain('Level 1 · With Claude in Japanese')
     await keys(s, '0')
     await s.ask(typed, `EN ▸ ${english}`)
     expect(s.model.turns[0]).toContain(typed)
     expect(s.model.turns[0]).not.toContain(english)
+    expect(s.model.turns[0]).not.toContain('<original-message')
   } finally {
     await s.close()
   }
@@ -231,16 +233,16 @@ test('← goes back from a row’s choices and then closes the list; Esc twice c
   try {
     await command(s, '/immerse', 'Immerse settings')
     await keys(s, 'Enter')
-    expect((await list(s))[0]).toContain('Immerse settings › Reading')
+    expect((await list(s))[0]).toContain('Immerse settings › Level')
     await keys(s, 'Left')
-    expect((await list(s))[0]).not.toContain('Reading')
+    expect((await list(s))[0]).not.toContain('› Level')
     await keys(s, 'Left')
     expect(await list(s)).toEqual([])
     await command(s, '/immerse', 'Immerse settings')
     await keys(s, 'Escape', 'Escape')
     await Bun.sleep(800)
     expect(await list(s)).toEqual([])
-    expect((await s.screen()).some(line => line.includes('type to close'))).toBe(false)
+    expect((await s.screen()).some(line => HELD_ROW.test(line))).toBe(false)
   } finally {
     await s.close()
   }

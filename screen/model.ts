@@ -11,8 +11,12 @@
 import { asText, fixSystem, judgeSystem, pairOf, tableSystem, toTargetSystem, translateSystem } from '../plugin/hooks/lang'
 import type { Pair } from '../plugin/hooks/lang'
 
-/** Which of the plugin's instructions a small call carries. */
-export type Kind = 'translate' | 'table' | 'toTarget' | 'fix' | 'judge'
+/**
+ * Which of the plugin's instructions a small call carries. `translate` and `table` put a reply in the
+ * learned language into the native one; `translateBack` and `tableBack` put a reply in the native language
+ * into the learned one.
+ */
+export type Kind = 'translate' | 'table' | 'translateBack' | 'tableBack' | 'toTarget' | 'fix' | 'judge'
 
 /** What a scenario says the model answers. */
 export type Script = {
@@ -34,6 +38,8 @@ export type Model = {
   calls: { kind: Kind; text: string }[]
   /** Everything each turn handed the model on the person's side, in order: their messages, and what Claude Code adds around them. */
   turns: string[]
+  /** The messages of each turn's request as sent, for a scenario that checks their exact shape. */
+  requests: unknown[][]
   stop(): void
 }
 
@@ -52,9 +58,12 @@ function handedOver(prompt: string): string | null {
 }
 
 function kindOf(system: string, pair: Pair): Kind | null {
+  const back: Pair = { native: pair.target, target: pair.native }
   const kinds: [Kind, string][] = [
     ['translate', translateSystem(pair)],
     ['table', tableSystem(pair)],
+    ['translateBack', translateSystem(back)],
+    ['tableBack', tableSystem(back)],
     ['toTarget', toTargetSystem(pair)],
     ['fix', fixSystem(pair)],
     ['judge', judgeSystem(pair)],
@@ -81,6 +90,7 @@ export function startModel(script: Script): Model {
   const unscripted: string[] = []
   const calls: { kind: Kind; text: string }[] = []
   const turns: string[] = []
+  const requests: unknown[][] = []
   const server = Bun.serve({
     port: 0,
     hostname: '127.0.0.1',
@@ -99,11 +109,12 @@ export function startModel(script: Script): Model {
       }
       if ((body.tools?.length ?? 0) > 0) {
         const reply = script.replies[Math.min(turns.length, script.replies.length - 1)] ?? '[no reply scripted]'
+        requests.push(body.messages ?? [])
         turns.push((body.messages ?? []).filter(message => message.role === 'user').map(message => textOf(message.content)).join('\n'))
         return answer(body, reply)
       }
       return answer(body, 'ok')
     },
   })
-  return { url: `http://127.0.0.1:${server.port}`, unscripted, calls, turns, stop: () => void server.stop(true) }
+  return { url: `http://127.0.0.1:${server.port}`, unscripted, calls, turns, requests, stop: () => void server.stop(true) }
 }
