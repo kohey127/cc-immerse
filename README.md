@@ -145,6 +145,12 @@ claude plugin test plugin
 
 A session with nobody at its prompt (`claude -p`, a scheduled run) is left alone, so a script's own prompt is never rewritten.
 
+Checks on a real screen are in `screen/`: a real Claude Code runs in a scripted terminal with the plugin loaded and a stand-in for the model, and each scenario types, moves the pointer, clicks, and reads what is drawn.
+
+```sh
+cd screen && bun install && bun test
+```
+
 ## Prior work
 
 [cc-trans](https://github.com/ktk1012/cc-trans) and [Lingo](https://github.com/royisme/lingo) translate Claude Code conversations, and trying them led to this plugin. They show your own language next to the English. cc-immerse keeps the English in front and shows your language only when you ask, so that you read the English first. The live preview while you type follows the approach cc-trans takes.
