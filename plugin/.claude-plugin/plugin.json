@@ -71,41 +71,25 @@
     },
     "readingLevel": {
       "type": "string",
-      "title": "Immerse · Reading level",
-      "description": "How much help you get reading replies. 1: both languages side by side. 2: your language shown faintly below. 3: hidden, opened with a click. 4: as 3. 5: no help. Each thing a level sets can also be set by itself below.",
-      "default": "3",
+      "title": "Immerse · Reading",
+      "description": "Off: replies are left as they are. 1: your language, with the language you are learning behind a click. 2: both, your language first. 3: both, the language you are learning first. 4: the language you are learning, with your language behind a click. /immerse shows each of them.",
+      "default": "4",
       "options": [
+        "Off",
         "1",
         "2",
         "3",
-        "4",
-        "5"
+        "4"
       ]
     },
-    "writingLevel": {
+    "layout": {
       "type": "string",
-      "title": "Immerse · Writing level",
-      "description": "How much help you get writing. 1 to 3: what you type in your language is sent in the language you are learning, and what you type in that language is corrected as you type and after you send. 4: corrected only after you send. 5: no help.",
-      "default": "3",
+      "title": "Immerse · Layout at levels 2 and 3",
+      "description": "Side by side: the two languages in two columns, in a wide window. Below: the second language under each block.",
+      "default": "Side by side",
       "options": [
-        "1",
-        "2",
-        "3",
-        "4",
-        "5"
-      ]
-    },
-    "showTranslation": {
-      "type": "string",
-      "title": "Immerse · When the translation shows",
-      "description": "On request: hidden until you click a block’s mark. Always, below: under every block. Side by side: beside every block, in a wide window. Never: replies are left as they are.",
-      "default": "Follow the level",
-      "options": [
-        "Follow the level",
-        "On request",
-        "Always, below",
         "Side by side",
-        "Never"
+        "Below"
       ]
     },
     "mark": {
@@ -141,8 +125,7 @@
       "default": "Faint italic",
       "options": [
         "Faint italic",
-        "Faint",
-        "Normal"
+        "Faint"
       ]
     },
     "allButtons": {
@@ -155,9 +138,8 @@
       "type": "string",
       "title": "Immerse · What you type in your language",
       "description": "Send in the language you are learning: Claude receives that version. Show it, send as typed: you see that version, Claude receives your own words. Leave it alone: nothing is done.",
-      "default": "Follow the level",
+      "default": "Send in the language you are learning",
       "options": [
-        "Follow the level",
         "Send in the language you are learning",
         "Show it, send as typed",
         "Leave it alone"
@@ -185,9 +167,8 @@
       "type": "string",
       "title": "Immerse · Corrections",
       "description": "When what you type in the language you are learning is corrected.",
-      "default": "Follow the level",
+      "default": "While typing and after sending",
       "options": [
-        "Follow the level",
         "While typing and after sending",
         "After sending",
         "Off"

@@ -11,6 +11,58 @@ export function isTable(src: string): boolean {
   return /^\s*\|.*\|\s*$/m.test(src)
 }
 
+/** The cells of one row of a Markdown table; null for a line that is not such a row. */
+function cellsOf(line: string): string[] | null {
+  const row = /^\s*\|(.*)\|\s*$/.exec(line)
+  return row ? (row[1] ?? '').split('|').map(cell => cell.trim()) : null
+}
+
+/**
+ * A text holding a Markdown table, as the rows of text that draw it: the table with its borders, a
+ * rule under every row and the header centred, and any line around it as it is.
+ *
+ * The plugin draws a translated table from these, so that it takes the translation's colour like every
+ * other translation. Null when the text holds no table or the table is wider than `max` columns.
+ */
+export function tableLines(src: string, max: number): string[] | null {
+  const out: string[] = []
+  const lines = src.split('\n')
+  let hasTable = false
+  for (let i = 0; i < lines.length; ) {
+    if (!cellsOf(lines[i] ?? '')) {
+      out.push(lines[i++] ?? '')
+      continue
+    }
+    const rows: string[][] = []
+    let hasHeader = false
+    for (; i < lines.length; i++) {
+      const cells = cellsOf(lines[i] ?? '')
+      if (!cells) break
+      const isRule = cells.every(cell => /^:?-+:?$/.test(cell))
+      if (isRule) hasHeader = rows.length === 1
+      else rows.push(cells)
+    }
+    if (rows.length === 0) continue
+    hasTable = true
+    const count = Math.max(...rows.map(row => row.length))
+    const widths = Array.from({ length: count }, (_, k) => Math.max(1, ...rows.map(row => widthOf(row[k] ?? ''))))
+    if (widths.reduce((sum, w) => sum + w + 3, 1) > max) return null
+    const rule = (left: string, mid: string, right: string): string => left + widths.map(w => '─'.repeat(w + 2)).join(mid) + right
+    out.push(rule('┌', '┬', '┐'))
+    rows.forEach((row, r) => {
+      const cells = widths.map((w, k) => {
+        const cell = row[k] ?? ''
+        const spare = w - widthOf(cell)
+        const before = r === 0 && hasHeader ? Math.floor(spare / 2) : 0
+        return ` ${' '.repeat(before)}${cell}${' '.repeat(spare - before)} `
+      })
+      out.push(`│${cells.join('│')}│`)
+      out.push(r === rows.length - 1 ? rule('└', '┴', '┘') : rule('├', '┼', '┤'))
+    })
+  }
+  return hasTable ? out : null
+}
+
 export function hash(text: string): string {
   let h = 5381
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
@@ -53,7 +105,8 @@ export function split(text: string, pair: Pair): Chunk[] {
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i] ?? ''
     const after = blocks[i + 1]
-    const isHeadingAlone = /^\s*#{1,6}\s/.test(block) && !block.includes('\n')
+    // A title: a Markdown heading, or a line that is bold from end to end. Alone it says too little to translate well.
+    const isHeadingAlone = (/^\s*#{1,6}\s/.test(block) || /^\s*\*\*[^*]+\*\*:?\s*$/.test(block)) && !block.includes('\n')
     if (isHeadingAlone && after !== undefined) {
       merged.push(block + '\n\n' + after)
       i++
@@ -164,26 +217,70 @@ export function widthOf(text: string): number {
 }
 
 /** Pieces laid out as rows no wider than `max` columns, broken at spaces. A Button draws one row, so the plugin wraps. */
+/** The marks a row does not start with: each stays with the character before it. */
+const CLOSING = '、。，．！？：；）」』】〉》'
+
+/**
+ * The parts of a word a row may end after. A word in a spaced language is one part. A language
+ * written without spaces can end a row after any character, so each wide character is a part; and
+ * a word wider than the row, which fits nowhere, is cut to the row.
+ */
+function partsOf(word: string, max: number): string[] {
+  const parts: string[] = []
+  /** A run of narrow characters: one part, or cut to the row when it is wider than one. */
+  const push = (run: string): void => {
+    if (run === '') return
+    if (widthOf(run) <= max) {
+      parts.push(run)
+      return
+    }
+    let cut = ''
+    for (const ch of run) {
+      if (widthOf(cut) + widthOf(ch) > max) {
+        parts.push(cut)
+        cut = ''
+      }
+      cut += ch
+    }
+    parts.push(cut)
+  }
+  let run = ''
+  for (const ch of word) {
+    if (widthOf(ch) < 2) {
+      run += ch
+      continue
+    }
+    push(run)
+    run = ''
+    if (CLOSING.includes(ch) && parts.length > 0) parts[parts.length - 1] += ch
+    else parts.push(ch)
+  }
+  push(run)
+  return parts
+}
+
 export function wrap(pieces: readonly Piece[], max: number): Piece[][] {
   const rows: Piece[][] = [[]]
   let used = 0
   for (const piece of pieces) {
-    for (const token of piece.text.split(/(\s+)/)) {
-      if (token === '') continue
-      const isSpace = /^\s+$/.test(token)
-      const w = widthOf(token)
-      let row = rows[rows.length - 1] ?? []
-      if (used + w > max && used > 0) {
-        row = []
-        rows.push(row)
-        used = 0
-        if (isSpace) continue
+    for (const word of piece.text.split(/(\s+)/)) {
+      if (word === '') continue
+      const isSpace = /^\s+$/.test(word)
+      for (const token of isSpace ? [word] : partsOf(word, max)) {
+        const w = widthOf(token)
+        let row = rows[rows.length - 1] ?? []
+        if (used + w > max && used > 0) {
+          row = []
+          rows.push(row)
+          used = 0
+          if (isSpace) continue
+        }
+        if (isSpace && used === 0) continue
+        const last = row[row.length - 1]
+        if (last && last.kind === piece.kind) last.text += isSpace ? ' ' : token
+        else row.push({ text: isSpace ? ' ' : token, kind: piece.kind })
+        used += isSpace ? 1 : w
       }
-      if (isSpace && used === 0) continue
-      const last = row[row.length - 1]
-      if (last && last.kind === piece.kind) last.text += isSpace ? ' ' : token
-      else row.push({ text: isSpace ? ' ' : token, kind: piece.kind })
-      used += isSpace ? 1 : w
     }
   }
   return rows.filter(row => row.length > 0)

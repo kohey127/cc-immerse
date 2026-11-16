@@ -21,6 +21,10 @@ declare module 'claude-code' {
       sent: StateFamily<string | null>
       /** The live preview above the prompt box; null when the draft needs none. */
       draft: Draft | null
+      /** The latest reply, for `/immerse open`: each message of it with its text. Kept here, not in the module, because a setting written loads the module again. */
+      latest: { id: string; text: string }[]
+      /** The settings list above the prompt, while `/immerse` has it open: which list shows (`main`, or a row's key) and the row the keyboard is on. Null when closed. */
+      menu: { view: string; cursor: string } | null
     }
   }
 }

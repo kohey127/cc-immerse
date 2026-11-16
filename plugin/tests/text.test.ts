@@ -3,7 +3,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { pairOf } from '../hooks/lang'
-import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, widthOf, wrap } from '../hooks/text'
+import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, tableLines, widthOf, wrap } from '../hooks/text'
 
 const JA_EN = pairOf('Japanese', 'English')
 const ES_EN = pairOf('Spanish', 'English')
@@ -53,6 +53,16 @@ test('a heading joins the chunk after it', async () => {
   const chunks = split('## What changed\n\nThe mark moved to the last line.', JA_EN)
   expect(chunks.length).toBe(1)
   expect(chunks[0]?.src).toBe('## What changed\n\nThe mark moved to the last line.')
+})
+
+test('regression: a bold line standing alone as a title joins the chunk after it', async () => {
+  const chunks = split('**What I need from you**\n\n1. Run the reload.\n2. Open the settings.', JA_EN)
+  expect(chunks.length).toBe(1)
+  expect(chunks[0]?.src).toBe('**What I need from you**\n\n1. Run the reload.\n2. Open the settings.')
+})
+
+test('a bold sentence inside a paragraph, and a paragraph that only begins in bold, stay their own chunks', async () => {
+  expect(split('**Settings:** type the command and scroll.\n\nThe next paragraph.', JA_EN).length).toBe(2)
 })
 
 test('a table chunk is marked as a table', async () => {
@@ -145,4 +155,64 @@ test('a pair that shares its letters: a sentence is left to the model, a word or
 
 test('a third language is left alone', async () => {
   expect(languageOf('이 함수를 리팩터링해 주세요', JA_EN)).toBe('other')
+})
+
+// --- a translated table, laid out by the plugin so that it can be drawn in the translation's colour ----
+
+test('a table is laid out as rows of text: a header, a rule under every row, columns as wide as their widest cell', async () => {
+  expect(tableLines('| Check | Result |\n| --- | --- |\n| Unit tests | Passed |', 80)).toEqual([
+    '┌────────────┬────────┐',
+    '│   Check    │ Result │',
+    '├────────────┼────────┤',
+    '│ Unit tests │ Passed │',
+    '└────────────┴────────┘',
+  ])
+})
+
+test('a Japanese cell is measured by the columns it takes, so the borders line up', async () => {
+  const lines = tableLines('| チェック | 結果 |\n| --- | --- |\n| 単体テスト | 成功 |', 80) ?? []
+  expect(lines).toEqual(['┌────────────┬──────┐', '│  チェック  │ 結果 │', '├────────────┼──────┤', '│ 単体テスト │ 成功 │', '└────────────┴──────┘'])
+  expect(new Set(lines.map(widthOf)).size).toBe(1)
+})
+
+test('a line around the table is kept as a line of its own', async () => {
+  expect(tableLines('結果の一覧\n\n| A | B |\n| --- | --- |\n| 1 | 2 |', 80)).toEqual(['結果の一覧', '', '┌───┬───┐', '│ A │ B │', '├───┼───┤', '│ 1 │ 2 │', '└───┴───┘'])
+})
+
+test('a table wider than the room it has is not laid out: the caller draws it another way', async () => {
+  expect(tableLines('| A long header cell | Another long header cell |\n| --- | --- |\n| 1 | 2 |', 30)).toBeNull()
+})
+
+test('a text with no table in it is not laid out', async () => {
+  expect(tableLines('Only a sentence.', 80)).toBeNull()
+})
+
+// --- wrapping a language written without spaces ----------------------------------------------------
+
+const rowsOf = (text: string, max: number) => wrap(piecesOf(text), max).map(row => row.map(p => p.text).join(''))
+
+test('regression: a long Japanese sentence is broken where the row ends, not pushed whole onto the next row', async () => {
+  // Seen on a real screen at reading level 2: "main" stood alone on the first row and the rest ran past the edge.
+  const text = 'main ブランチでビルドが通り、すべてのチェックが1分以内に終わりました。'
+  const rows = rowsOf(text, 30)
+  expect(rows[0]?.startsWith('main ブランチ')).toBe(true)
+  for (const row of rows) expect(widthOf(row) <= 30).toBe(true)
+  expect(rows.join('')).toBe(text)
+})
+
+test('a row never starts with a closing mark: 、 and 。 stay with the character before them', async () => {
+  const rows = rowsOf('あいうえお、かきくけこ。', 10)
+  expect(rows).toEqual(['あいうえ', 'お、かきく', 'けこ。'])
+})
+
+test('an English word is still never broken inside, also beside Japanese', async () => {
+  const rows = rowsOf('これは wrapping のテストです', 12)
+  expect(rows.some(row => /^wrapping/.test(row) || / wrapping/.test(row))).toBe(true)
+  expect(rows.join('').replace(/\s/g, '')).toBe('これはwrappingのテストです')
+})
+
+test('a word wider than the row is broken, since it fits nowhere', async () => {
+  const rows = rowsOf('https://example.com/a/very/long/path/that/goes/on', 20)
+  for (const row of rows) expect(widthOf(row) <= 20).toBe(true)
+  expect(rows.join('')).toBe('https://example.com/a/very/long/path/that/goes/on')
 })

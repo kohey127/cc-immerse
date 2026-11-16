@@ -57,3 +57,20 @@ test('regression: a paragraph longer than the window is drawn in rows that fit i
   for (const row of rows) expect(row.text.length <= 40).toBe(true)
   await ui.unmount()
 })
+
+test('regression: the text reaches the small model marked as text to translate, so a short title is not answered as a message', async ($, on) => {
+  const clock = mock.clock(on)
+  let asked = { system: '', prompt: '' }
+  on('model.complete', (_: unknown, e: { system?: string; prompt: string }) => {
+    asked = { system: e.system ?? '', prompt: e.prompt }
+    return { value: { isAnswered: true as const, text: '私があなたにお願いしたいこと', usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply('What I need from you today'))
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  expect(asked.prompt).toBe('<text>\nWhat I need from you today\n</text>')
+  expect(asked.system).toContain('<text>')
+  expect(asked.system).toMatch(/never (answer|reply)/i)
+  await ui.unmount()
+})

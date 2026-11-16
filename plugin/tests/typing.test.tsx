@@ -55,7 +55,7 @@ test('corrections Off: a message in the learned language costs no model call', {
   expect(calls).toBe(0)
 })
 
-test('writing level 5: nothing is done to anything typed', { options: { writingLevel: '5' } }, async ($, on) => {
+test('both kinds of typing help off: nothing is done to anything typed', { options: { nativeInput: 'Leave it alone', corrections: 'Off' } }, async ($, on) => {
   expect((await send($, on, JAPANESE)).received).toBe(JAPANESE)
 })
 
@@ -95,7 +95,7 @@ test('shared alphabet, judged neither: sent as typed', SPANISH, async ($, on) =>
   expect(received).toBe(TYPED)
 })
 
-test('shared alphabet with nothing to do either way costs no model call', { options: { nativeLanguage: 'Spanish', writingLevel: '5' } }, async ($, on) => {
+test('shared alphabet with nothing to do either way costs no model call', { options: { nativeLanguage: 'Spanish', nativeInput: 'Leave it alone', corrections: 'Off' } }, async ($, on) => {
   const { received, calls } = await send($, on, TYPED, 'N\nPlease rename this variable.')
   expect(received).toBe(TYPED)
   expect(calls).toBe(0)
