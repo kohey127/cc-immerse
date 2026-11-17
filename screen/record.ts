@@ -1,6 +1,6 @@
 // Records the pictures the READMEs show, from a real screen with the stand-in model, so they can be made
 // again whenever the display changes. `bun screen/record.ts` makes every set; a set's name after it
-// (`ja-en`, `en-es`) makes that one, and a scene's name after that (`hero`, `typing`, `levels`, `settings`)
+// (`ja-en`, `zh-en`, `en-es`) makes that one, and a scene's name after that (`hero`, `typing`, `levels`, `settings`)
 // makes that scene only. The files are in assets/<set>/.
 // A set is one reader: the README in a language shows a speaker of it learning another. The scenes are a
 // person at work, not a programmer: the README is for anyone who uses Claude Code.
@@ -69,6 +69,27 @@ const SETS: readonly Words[] = [
     wrong: 'I has a question about the budget.',
     right: 'I have a question about the budget.',
     note: 'has → have: 主語が I のとき',
+    short: 'Sure. What would you like to know?',
+  },
+  {
+    name: 'zh-en',
+    native: 'Chinese (Simplified)',
+    target: 'English',
+    tag: 'EN',
+    asked: '请为下周的会议提几个议题',
+    askedT: "Suggest agenda items for next week's meeting.",
+    replyT: EN_REPLY,
+    tableT: table([['Item', 'Owner', 'Time'], ['Decide the launch date', 'Wang', '20 min'], ['Review the sales numbers', 'Li', '15 min'], ['Hiring update', 'Zhang', '10 min']]),
+    replyN: [
+      '下周我建议讨论三个议题。排序的原则是：会卡住其他团队工作的决定放在前面，之后再看也来得及的进度汇报放在最后。',
+      '如果时间不够，招聘进展可以改用邮件通知。发布日期不能再拖，因为宣传单的印刷订单必须在周五之前下单。',
+    ],
+    tableN: table([['议题', '负责人', '时间'], ['确定发布日期', '王', '20分钟'], ['查看销售数据', '李', '15分钟'], ['招聘进展', '张', '10分钟']]),
+    cellT: 'Hiring update',
+    cellN: '招聘进展',
+    wrong: 'I has a question about the budget.',
+    right: 'I have a question about the budget.',
+    note: 'has → have：主语是 I 时用 have',
     short: 'Sure. What would you like to know?',
   },
   {
