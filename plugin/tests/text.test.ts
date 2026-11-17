@@ -227,3 +227,21 @@ test('a block of a reply is marked by its language: the learned one, the native 
     [false, false],
   ])
 })
+
+// Seen while recording the README for an English speaker learning Spanish: at level 2 Claude answered in
+// English, and the plugin took every block for Spanish and asked for it to be put into English.
+test('regression: where the two languages share their letters, a block is taken to be in the language the level talks in', async () => {
+  const pair = pairOf('English', 'Spanish')
+  const english = 'The build passed on the main branch.'
+  expect(split(english, pair, 'native')[0]).toEqual({ src: english, isProse: false, isNative: true, isTable: false })
+  expect(split(english, pair, 'target')[0]).toEqual({ src: english, isProse: true, isNative: false, isTable: false })
+  // With nothing said it is the learned language, as before.
+  expect(split(english, pair)[0]?.isProse).toBe(true)
+})
+
+test('where the letters tell the two languages apart, the level changes nothing', async () => {
+  const pair = pairOf('Japanese', 'English')
+  const english = 'The build passed on the main branch.'
+  expect(split(english, pair, 'native')[0]).toEqual({ src: english, isProse: true, isNative: false, isTable: false })
+  expect(split('main ブランチでビルドが通りました。', pair, 'target')[0]?.isNative).toBe(true)
+})

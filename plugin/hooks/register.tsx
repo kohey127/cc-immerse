@@ -22,6 +22,8 @@ const MENU = { plugin: 'cc-immerse', key: 'menu' } as const
 // so that a script's own prompt is never rewritten.
 let pair: Pair = pairOf('', '')
 let settings: Settings = readSettings({})
+/** The language the person and Claude talk in at the level: what a block is taken to be in where its letters cannot say. */
+let spoken: 'native' | 'target' = 'target'
 /** The options as stored: what the settings dialog shows as set now. */
 let stored: Readonly<Record<string, unknown>> = {}
 /** The band above the prompt, by the id its drawing is asked under: where the keyboard is put back after a pick. */
@@ -579,6 +581,7 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
 export const register: Register = (on, options) => {
   pair = pairOf(String(options.nativeLanguage ?? ''), String(options.targetLanguage ?? ''))
   settings = readSettings(options)
+  spoken = isWithClaudeInTarget(levelOf(options)) ? 'target' : 'native'
   stored = options
 
   // Which messages are the latest reply, for /immerse. Module values: a reload starts them over.
@@ -643,7 +646,7 @@ export const register: Register = (on, options) => {
     const isOff = arg === 'close'
     // The latest reply is in the module since its turn began, or in the session's state from before a reload.
     const kept = recent.size > 0 || isOff ? [] : ((await $.state.get(LATEST)).value ?? [])
-    const targets = isOff ? drawn : recent.size > 0 ? recent : new Map(kept.map(m => [m.id, split(m.text, pair)] as const))
+    const targets = isOff ? drawn : recent.size > 0 ? recent : new Map(kept.map(m => [m.id, split(m.text, pair, spoken)] as const))
     const counts = await Promise.all([...targets].map(([requestId, chunks]) => setAll($, requestId, chunks, !isOff)))
     const n = counts.reduce((a, b) => a + b, 0)
     if (isOff) return { text: 'Closed every translation.', isTextDisplayOnly: true }
@@ -973,7 +976,7 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
     if (settings.show === 'never' || e.props.isSummary || !(await isOn($))) return next(e)
-    const chunks = split(e.props.text, pair)
+    const chunks = split(e.props.text, pair, spoken)
     if (!chunks.some(c => c.isProse || c.isNative)) return next(e)
     drawn.set(e.requestId, chunks)
     if (hasTurn && !before.has(e.requestId) && !recent.has(e.requestId)) {

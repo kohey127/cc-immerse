@@ -79,8 +79,13 @@ export function isProse(src: string, pair: Pair): boolean {
   return isTargetText(src, pair)
 }
 
-/** Blocks separated by blank lines; a fenced block stays whole, a heading joins the block after it. */
-export function split(text: string, pair: Pair): Chunk[] {
+/**
+ * Blocks separated by blank lines; a fenced block stays whole, a heading joins the block after it.
+ * `spoken`: the language the person and Claude talk in at the level. Two languages that share their letters
+ * (English and Spanish) cannot be told apart by them, and a block is then taken to be in that one: Claude
+ * answers in the language it is asked in.
+ */
+export function split(text: string, pair: Pair, spoken: 'native' | 'target' = 'target'): Chunk[] {
   const blocks: string[] = []
   let cur: string[] = []
   let fence: string | null = null
@@ -119,8 +124,9 @@ export function split(text: string, pair: Pair): Chunk[] {
   // The pair the other way round asks the same question of the native language.
   const back: Pair = { native: pair.target, target: pair.native }
   return merged.map(src => {
-    const inTarget = isProse(src, pair)
-    return { src, isProse: inTarget, isNative: !inTarget && isProse(src, back), isTable: isTable(src) }
+    const inNative = isProse(src, back)
+    const inTarget = isProse(src, pair) && !(inNative && spoken === 'native')
+    return { src, isProse: inTarget, isNative: !inTarget && inNative, isTable: isTable(src) }
   })
 }
 
