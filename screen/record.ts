@@ -174,7 +174,7 @@ for (const n of wants('levels') ? ['1', '2', '3', '4'] : []) {
 
 // 4. The settings: one list, the arrows, and a preview that follows.
 if (wants('settings')) {
-  const s = await open({ cols: 96, rows: 50, record: 'settings', script: learned })
+  const s = await open({ cols: 96, rows: 72, record: 'settings', script: learned })
   await pause(600)
   await slowly(s, '/immerse')
   await pause(500)
@@ -183,16 +183,20 @@ if (wants('settings')) {
   await pause(1800)
   await s.press('Enter')
   await pause(1600)
-  // The list of levels is the tallest thing shown: the picture starts at its first row.
-  const from = await s.rowOf('Immerse settings ›')
+  // The list grows upwards with its preview: the picture starts at the highest row its header reaches.
+  let from = await s.rowOf('Immerse settings')
+  const look = async (ms: number): Promise<void> => {
+    await pause(ms)
+    from = Math.min(from, await s.rowOf('Immerse settings'))
+  }
   for (let i = 0; i < 3; i++) {
     await s.press('Up')
-    await pause(1500)
+    await look(1500)
   }
   await s.press('Down')
-  await pause(1300)
+  await look(1300)
   await s.press('Enter')
-  await pause(3000)
+  await look(3000)
   const to = await boxEnd(s)
   await s.close()
   cut('settings.gif', from, to)
