@@ -34,7 +34,23 @@ Your language is shown in English as you type. Your English is corrected. Nothin
 
 ![Level 4](assets/level-4.png)
 
-At 3 and 4 your own words still go with every message, so nothing you mean is lost.
+## Nothing you mean is lost
+
+A translation can miss what you meant. So Claude never gets a translation alone.
+
+| Level | What Claude gets |
+| --- | --- |
+| 1, 2 | Exactly what you typed |
+| 3, 4 | The English version as your message, with your own words beside it |
+
+```
+What is the build status?            ← your message, in English
+<original-message language="Japanese">
+ビルドの状態は？                       ← what you typed, kept beside it
+</original-message>
+```
+
+Where the two differ, Claude goes by your own words: with an English version made wrong on purpose, it followed the original in 3 of 3 tries. What you type in English is sent as typed; the correction is shown to you, not to Claude.
 
 ## One screen of settings
 
