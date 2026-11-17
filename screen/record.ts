@@ -41,16 +41,23 @@ async function slowly(s: Session, text: string): Promise<void> {
     await pause(70)
   }
 }
+/** The seconds a move of the pointer takes. */
+const MOVE = 0.8
+
 /** Where the pointer is at a moment of a recording: seconds from its start, and the cell it points at. */
 type Point = { at: number; row: number; col: number }
 
-/** A value over time that goes from one point's to the next in the 0.6 s before the next is reached, as ffmpeg reads it. */
+/**
+ * A value over time that goes from one point's to the next in the 0.8 s before the next is reached, as ffmpeg
+ * reads it: slowly off, quickly across, slowly on, as a hand moves a pointer.
+ */
 function path(points: readonly Point[], of: (p: Point) => number, enter: number): string {
   let expr = String(of(points[0] as Point) + enter)
   points.forEach((p, i) => {
     const before = i === 0 ? of(p) + enter : of(points[i - 1] as Point)
-    const start = (p.at - 0.6).toFixed(2)
-    expr = `if(gte(t,${p.at.toFixed(2)}),${of(p)},if(gte(t,${start}),${before}+(${of(p)}-${before})*(t-${start})/0.6,${expr}))`
+    const start = (p.at - MOVE).toFixed(2)
+    const u = `((t-${start})/${MOVE})`
+    expr = `if(gte(t,${p.at.toFixed(2)}),${of(p)},if(gte(t,${start}),${before}+(${of(p)}-${before})*${u}*${u}*(3-2*${u}),${expr}))`
   })
   return expr
 }
@@ -60,7 +67,8 @@ function path(points: readonly Point[], of: (p: Point) => number, enter: number)
  * what is left is what the plugin does, and nothing a reader has to work out is not part of it.
  * The terminal draws a cell 21 points high and 113/11 wide under 64 points of title bar, inside a 24 point
  * margin; a recording is drawn at twice that. A terminal does not draw the pointer, so a recording in which
- * something is clicked has one drawn on it: without it a block seems to open by itself.
+ * something is clicked has one drawn on it: without it a block seems to open by itself. A recording holds a
+ * frame only where the screen changed, so it is first given 25 frames a second for the pointer to move in.
  */
 function cut(name: string, from: number, to: number, pointer: readonly Point[] = []): void {
   const isGif = name.endsWith('.gif')
@@ -69,7 +77,7 @@ function cut(name: string, from: number, to: number, pointer: readonly Point[] =
   const x = (p: Point): number => Math.round(((p.col + 0.5) * 113) / 11) * k
   const y = (p: Point): number => (21 * (p.row - from) + 8 + 10) * k
   const first = pointer[0]
-  const drawn = first ? `[0]${crop}[cut];[cut][1]overlay=x='${path(pointer, x, 240)}':y='${path(pointer, y, 160)}':enable='gte(t,${(first.at - 0.6).toFixed(2)})'` : `[0]${crop}`
+  const drawn = first ? `[0]fps=25,${crop}[cut];[cut][1]overlay=x='${path(pointer, x, 240)}':y='${path(pointer, y, 160)}':enable='gte(t,${(first.at - MOVE).toFixed(2)})'` : `[0]${crop}`
   const filter = isGif ? `${drawn},split[a][b];[a]palettegen[p];[b][p]paletteuse` : drawn
   const made = Bun.spawnSync(['ffmpeg', '-v', 'error', '-y', '-i', join(OUT, name), ...(first ? ['-i', join(import.meta.dir, 'pointer.png')] : []), '-filter_complex', filter, join(ASSETS, name)])
   if (made.exitCode !== 0) throw new Error(`ffmpeg could not cut ${name}: ${made.stderr.toString()}`)
