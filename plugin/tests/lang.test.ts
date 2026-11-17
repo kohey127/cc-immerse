@@ -2,7 +2,7 @@
 // small model is asked. Written before hooks/lang.ts existed.
 import { expect, test } from 'claude-code/testing'
 
-import { classify, fixSystem, isTargetText, judgeSystem, languageByName, pairOf, readFix, readJudgement, toTargetSystem, translateSystem } from '../hooks/lang'
+import { againSystem, classify, fixSystem, isMistranslated, isTargetText, judgeSystem, languageByName, pairOf, readFix, readJudgement, toTargetSystem, translateSystem } from '../hooks/lang'
 
 const JA_EN = pairOf('Japanese', 'English')
 const KO_EN = pairOf('Korean', 'English')
@@ -151,4 +151,26 @@ test('an English sentence holding a Japanese word is English', async () => {
   const text = 'The 設定 file is in the config folder of the project.'
   expect(isTargetText(text, JA_EN)).toBe(true)
   expect(isTargetText(text, EN_JA)).toBe(false)
+})
+
+// Seen on the author's screen: a block about the Spanish pictures came back in Spanish, under a reply read
+// by a Japanese speaker, and was shown as its translation.
+test('regression: a translation that is not in the language asked for is known as one, where the letters can say', async () => {
+  const pair = pairOf('Japanese', 'English')
+  expect(isMistranslated('## Qué cambió\n\n- Respuestas: cuando ambos idiomas se muestran siempre, el complemento dibuja las dos tablas.', pair)).toBe(true)
+  expect(isMistranslated('## 変更点\n\n- 返信: 両方の言語が常に表示される場合、プラグインは2つの表を並べて描きます。', pair)).toBe(false)
+  // A translation that keeps a name or a command in Latin letters is still Japanese.
+  expect(isMistranslated('main ブランチで /reload-plugins を実行してください。', pair)).toBe(false)
+  // The other way: English was asked for and Japanese came back.
+  expect(isMistranslated('ビルドが通りました。テストは2件失敗しました。', { native: pair.target, target: pair.native })).toBe(true)
+  // Too short to say, and a pair that shares its letters cannot say at all.
+  expect(isMistranslated('OK', pair)).toBe(false)
+  expect(isMistranslated('La compilación pasó en la rama principal.', pairOf('English', 'Spanish'))).toBe(false)
+})
+
+test('asking again says which language the answer must be in', async () => {
+  const pair = pairOf('Japanese', 'English')
+  const again = againSystem(translateSystem(pair), pair)
+  expect(again.startsWith(translateSystem(pair))).toBe(true)
+  expect(again).toContain('must be in Japanese')
 })

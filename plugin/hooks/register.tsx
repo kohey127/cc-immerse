@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
-import { asText, fixSystem, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
+import { againSystem, asText, fixSystem, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
 import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
@@ -301,7 +301,12 @@ async function translate($: EngineInterface, src: string, id: string = trId(src)
   await $.state.set(ref, { status: 'pending', text: '', at: now })
   let next: Tr
   try {
-    const r = await $.model.complete({ model: 'haiku', system: system ?? (isTable(src) ? tableSystem(into) : translateSystem(into)), prompt: asText(src), maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
+    const asked = system ?? (isTable(src) ? tableSystem(into) : translateSystem(into))
+    const call = (instruction: string) => $.model.complete({ model: 'haiku', system: instruction, prompt: asText(src), maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
+    let r = await call(asked)
+    // An answer in another language is asked for once more, saying which language it must be in. The second
+    // answer stands whatever it is: there is no third try.
+    if (r.isAnswered && !system && isMistranslated(r.text, into)) r = await call(againSystem(asked, into))
     next = r.isAnswered ? { status: 'done', text: r.text.trim() } : { status: 'error', text: r.reason }
   } catch (err) {
     next = { status: 'error', text: (err instanceof Error ? err.message : String(err)).slice(0, 80) }
@@ -456,6 +461,10 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
         if (isSwapped) behind = u.inText ? <Box flexDirection="column">{lay(c.src, room).map(row => words(row, true))}</Box> : behindBlock(c.src, c.isTable)
         else if (needsSwap) behind = isAlways ? <Text dimColor>{tr?.status === 'error' ? `✗ ${tr.text}` : '…'}</Text> : null
         else if (done !== null && c.isTable) behind = behindBlock(done, true)
+        else if (done !== null && u.inText)
+          // Laid out as the reply is: the small model is asked for plain text and still keeps a heading's
+          // or a list's marks at times, which are then drawn, not shown.
+          behind = <Box flexDirection="column">{lay(done, room).map(row => words(row, true))}</Box>
         else
           behind = (
             <Text dimColor italic={isSlanted}>

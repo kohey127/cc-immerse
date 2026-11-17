@@ -74,3 +74,42 @@ test('regression: the text reaches the small model marked as text to translate, 
   expect(asked.system).toMatch(/never (answer|reply)/i)
   await ui.unmount()
 })
+
+// Seen on the author's screen under a heading with a list: one translation came back in Spanish, and the
+// others with their Markdown marks, drawn as they came.
+
+test('regression: a translation in another language is asked for once more, and the second answer is what is shown', async ($, on) => {
+  const clock = mock.clock(on)
+  const systems: string[] = []
+  on('model.complete', (_: unknown, e: { system?: string }) => {
+    systems.push(String(e.system))
+    const text = systems.length === 1 ? 'La compilación pasó en la rama principal sin errores.' : 'main ブランチでビルドが通りました。'
+    return { value: { isAnswered: true as const, text, usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply('The build passed on the main branch.'))
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  expect(systems.length).toBe(2)
+  expect(systems[1]).toContain('must be in Japanese')
+  expect(await ui.find({ type: 'Text', text: /ビルドが通りました/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /compilación/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('regression: a translation that kept its Markdown is drawn as the reply is, with no marks showing', async ($, on) => {
+  const clock = mock.clock(on)
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: '## チェック\n\n- **テスト:** `regression:` を先に書きました。\n- 141件が通っています。', usage: USAGE } }))
+  const ui = await $.ui.mount(reply('## Checks\n\n- **Tests:** written first as `regression:`.\n- 141 pass.'))
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  const behind = ((await ui.findAll({ type: 'Text' })) as any[]).filter(t => t.props.dimColor === true)
+  const drawn = behind.map(t => t.text).join('\n')
+  expect(drawn).toContain('チェック')
+  expect(drawn).toContain('141件が通っています')
+  expect(drawn.includes('##')).toBe(false)
+  expect(drawn.includes('**')).toBe(false)
+  expect(drawn.includes('`')).toBe(false)
+  await ui.unmount()
+})
