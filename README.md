@@ -1,5 +1,7 @@
 # cc-immerse
 
+English | [日本語](README.ja.md)
+
 **Learn a language while you work with Claude Code.**
 
 ![Ask in Japanese, read the answer in English, click for the Japanese](assets/hero.gif)
