@@ -1,5 +1,9 @@
 # cc-immerse
 
+[![release](https://img.shields.io/github/v/release/kohey127/cc-immerse)](https://github.com/kohey127/cc-immerse/releases/latest)
+[![license](https://img.shields.io/github/license/kohey127/cc-immerse)](LICENSE)
+[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+
 [English](README.md) | 日本語 | [简体中文](README.zh-CN.md)
 
 **Claude Code で仕事をしながら、語学が身につく。**
@@ -133,7 +137,6 @@ claude plugin update cc-immerse
 Claude Code の mod を集めたコミュニティのカタログに掲載されています。mod が何に触れるか、検査に通るかをスキャンした結果です:
 
 [![reach](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-reach.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
-[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
 
 </details>
 

@@ -1,5 +1,9 @@
 # cc-immerse
 
+[![release](https://img.shields.io/github/v/release/kohey127/cc-immerse)](https://github.com/kohey127/cc-immerse/releases/latest)
+[![license](https://img.shields.io/github/license/kohey127/cc-immerse)](LICENSE)
+[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+
 [English](README.md) | [日本語](README.ja.md) | 简体中文
 
 **一边用 Claude Code 工作，一边学语言。**
@@ -133,7 +137,6 @@ claude plugin update cc-immerse
 已收录于社区的 Claude Code mod 目录，该目录会扫描 mod 能访问什么以及是否通过校验：
 
 [![reach](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-reach.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
-[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
 
 </details>
 

@@ -1,5 +1,9 @@
 # cc-immerse
 
+[![release](https://img.shields.io/github/v/release/kohey127/cc-immerse)](https://github.com/kohey127/cc-immerse/releases/latest)
+[![license](https://img.shields.io/github/license/kohey127/cc-immerse)](LICENSE)
+[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+
 English | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 **Learn a language while you work with Claude Code.**
@@ -133,7 +137,6 @@ Early. It has been used daily for Japanese and English. The other languages, Spa
 Listed in the community catalogue of Claude Code mods, which scans what a mod can access and whether it validates:
 
 [![reach](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-reach.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
-[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
 
 </details>
 
