@@ -3,7 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Draft, Tr } from '../types'
 import { asText, fixSystem, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
-import { samplesOf, settingsRows } from './menu'
+import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
 import { isWithClaudeInTarget, levelOf, readSettings } from './settings'
 import type { Settings } from './settings'
@@ -797,6 +797,9 @@ export const register: Register = (on, options) => {
       const drawn = readSettings({ ...stored, readingLevel: p.level })
       const [said, other] = isInTarget ? [samples.target, samples.native] : [samples.native, samples.target]
       const [n, t] = [pair.native.name, pair.target.name]
+      // The second block is a table where the band has rows for it under the list, and a sentence where not.
+      const hasTable = hasRoomForTable(e.props.maxRows ?? 0, open ? open.choices.length + 2 : rows.length + 1, drawn.show === 'side')
+      const blocks = (sample: typeof said): readonly string[] => (hasTable ? [sample.reply[0], sample.table] : sample.reply)
       return (
         <Box flexDirection="column">
           <Text>{`❯ ${samples.native.asked}`}</Text>
@@ -805,19 +808,22 @@ export const register: Register = (on, options) => {
           <Text dimColor>{`Claude answers in ${isInTarget ? t : n}${p.level === 'Off' ? ', and nothing is done to it' : ''}:`}</Text>
           {drawn.show === 'never' ? (
             <Box flexDirection="column">
-              {said.reply.map(line => (
-                <Text>{`  ${line}`}</Text>
-              ))}
+              {blocks(said)
+                .flatMap((block, i) => (hasTable && i === 1 ? (tableLines(block, columns - 4) ?? [block]) : [block]))
+                .map(line => (
+                  <Text>{`  ${line}`}</Text>
+                ))}
             </Box>
           ) : (
             await drawReply($, e, {
               id: 'preview',
-              chunks: said.reply.map(src => ({ src, isProse: isInTarget, isNative: !isInTarget, isTable: false })),
+              chunks: blocks(said).map((src, i) => ({ src, isProse: isInTarget, isNative: !isInTarget, isTable: hasTable && i === 1 })),
               columns: Math.min(columns, 100),
               isFirstOfReply: false,
               settings: drawn,
               pair,
-              sample: { translations: other.reply, open: [false, true] },
+              // With a table the sentence is the block shown open: an open table would be five rows more.
+              sample: { translations: blocks(other), open: hasTable ? [true, false] : [false, true] },
             })
           )}
         </Box>

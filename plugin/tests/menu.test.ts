@@ -4,7 +4,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { LANGUAGES, pairOf } from '../hooks/lang'
-import { sampleIn, samplesOf, settingsRows } from '../hooks/menu'
+import { hasRoomForTable, sampleIn, samplesOf, settingsRows } from '../hooks/menu'
 import type { Row } from '../hooks/menu'
 
 const JA_EN = pairOf('Japanese', 'English')
@@ -95,4 +95,23 @@ test('every language offered has a sample of its own for the preview: no placeho
 test('with Korean being learned, the preview of level 4 is in Korean', async () => {
   const pair = pairOf('Japanese', 'Korean')
   expect(samplesOf(pair).target.asked).toBe('빌드 상태가 어떤가요?')
+})
+
+test('every language has a table of its own for the preview: a header and one row', async () => {
+  const seen = new Set<string>()
+  for (const language of LANGUAGES) {
+    const lines = sampleIn(language).table.split('\n')
+    expect({ language: language.name, rows: lines.length, isTable: lines.every(line => line.startsWith('|') && line.endsWith('|')) }).toEqual({ language: language.name, rows: 3, isTable: true })
+    seen.add(lines.join())
+  }
+  expect(seen.size).toBe(22)
+})
+
+test('the preview shows the table only where the band has rows for the list first, then the exchange with it', async () => {
+  // One language behind its mark: the list, then 16 rows.
+  expect(hasRoomForTable(21, 5, false)).toBe(true)
+  expect(hasRoomForTable(20, 5, false)).toBe(false)
+  // Both languages always shown: two tables, 20 rows.
+  expect(hasRoomForTable(27, 7, true)).toBe(true)
+  expect(hasRoomForTable(26, 7, true)).toBe(false)
 })

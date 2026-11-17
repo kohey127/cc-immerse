@@ -306,3 +306,33 @@ test('the list’s line is never sent to Claude: alone it is dropped, and beside
   const sent = await ($ as any).prompt.submit({ text: `What is the build status?${HINT_LINE}` })
   expect(sent.text).toBe('What is the build status?')
 })
+
+test('the preview of a level holds a table: closed behind its mark at level 4, in both languages at level 2', async ($, on) => {
+  const { immerse } = world(on)
+  await immerse($, '')
+  const ui = await $.ui.mount(BAND)
+  // Level 4: the reply is in English, so its table is, drawn as Claude Code draws a table. The sentence is the
+  // block shown open; the Japanese table stays behind its mark, so that the list keeps its rows.
+  const front = (await ui.find({ type: 'Markdown', text: /Passed/ })) as any
+  expect(front).toBeDefined()
+  expect(Boolean(front?.props.dimColor)).toBe(false)
+  expect(((await ui.find({ type: 'Text', text: /ビルド成功です/ })) as any)?.props.dimColor).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /成功 / })).toBeUndefined()
+  await ui.press({ key: 'level' })
+  await $.ui.focus({ component: 'AbovePrompt', requestId: 'above-prompt', element: 'level-2', origin: { kind: 'person' } } as never)
+  // Level 2: both languages always show, the English table under the Japanese one, faint.
+  expect(await ui.find({ type: 'Markdown', text: /成功/ })).toBeDefined()
+  const behind = (await ui.findAll({ type: 'Text', text: /Passed/ })) as any[]
+  expect(behind.length).toBe(1)
+  expect(behind[0]?.props.dimColor).toBe(true)
+  await ui.unmount()
+})
+
+test('in a band too short for the tables the preview keeps to its two sentences, so the list stays on the screen', async ($, on) => {
+  const { immerse } = world(on)
+  await immerse($, '')
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, maxRows: 17 } })
+  expect(await ui.find({ type: 'Text', text: /Two tests failed/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Passed/ })).toBeUndefined()
+  await ui.unmount()
+})

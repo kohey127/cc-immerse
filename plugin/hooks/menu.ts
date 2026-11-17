@@ -41,39 +41,56 @@ export type Sample = {
   reply: readonly [string, string]
   /** A question as the person types it. */
   asked: string
+  /** A small table, a header and one row: the second block of the reply where the band has rows for it. */
+  table: string
 }
 
 type Options = Readonly<Record<string, unknown>>
 
 /** The sample in each language the plugin offers: the same three sentences. Short, so that two fit side by side. */
+/** A table of a header and one row, as Markdown. */
+const table = (a: string, b: string, c: string, d: string): string => `| ${a} | ${b} |\n| --- | --- |\n| ${c} | ${d} |`
+
 const SAMPLES: Readonly<Record<string, Sample>> = {
-  en: { reply: ['The build passed.', 'Two tests failed.'], asked: 'What is the build status?' },
-  ja: { reply: ['ビルド成功です。', 'テスト2件が失敗。'], asked: 'ビルドの状態は？' },
-  ko: { reply: ['빌드가 통과했습니다.', '테스트 2개가 실패했습니다.'], asked: '빌드 상태가 어떤가요?' },
-  'zh-Hans': { reply: ['构建通过了。', '两个测试失败了。'], asked: '构建状态如何？' },
-  'zh-Hant': { reply: ['建置通過了。', '兩個測試失敗了。'], asked: '建置狀態如何？' },
-  es: { reply: ['La compilación pasó.', 'Fallaron dos pruebas.'], asked: '¿Cuál es el estado de la compilación?' },
-  fr: { reply: ['La compilation a réussi.', 'Deux tests ont échoué.'], asked: "Quel est l'état de la compilation ?" },
-  de: { reply: ['Der Build war erfolgreich.', 'Zwei Tests sind fehlgeschlagen.'], asked: 'Wie ist der Build-Status?' },
-  pt: { reply: ['A compilação passou.', 'Dois testes falharam.'], asked: 'Qual é o estado da compilação?' },
-  it: { reply: ['La build è riuscita.', 'Due test sono falliti.'], asked: 'Qual è lo stato della build?' },
-  nl: { reply: ['De build is geslaagd.', 'Twee tests zijn mislukt.'], asked: 'Wat is de status van de build?' },
-  pl: { reply: ['Build się powiódł.', 'Dwa testy nie przeszły.'], asked: 'Jaki jest status builda?' },
-  tr: { reply: ['Derleme başarılı oldu.', 'İki test başarısız oldu.'], asked: 'Derlemenin durumu nedir?' },
-  vi: { reply: ['Bản build đã thành công.', 'Hai bài kiểm thử thất bại.'], asked: 'Trạng thái build thế nào?' },
-  id: { reply: ['Build berhasil.', 'Dua tes gagal.'], asked: 'Bagaimana status build-nya?' },
-  ru: { reply: ['Сборка прошла успешно.', 'Два теста не прошли.'], asked: 'Каков статус сборки?' },
-  uk: { reply: ['Збірка пройшла успішно.', 'Два тести не пройшли.'], asked: 'Який статус збірки?' },
-  ar: { reply: ['نجح البناء.', 'فشل اختباران.'], asked: 'ما حالة البناء؟' },
-  hi: { reply: ['बिल्ड सफल रहा।', 'दो टेस्ट विफल हुए।'], asked: 'बिल्ड की स्थिति क्या है?' },
-  th: { reply: ['บิลด์ผ่านแล้ว', 'การทดสอบสองรายการล้มเหลว'], asked: 'สถานะของบิลด์เป็นอย่างไร' },
-  el: { reply: ['Το build ολοκληρώθηκε με επιτυχία.', 'Δύο τεστ απέτυχαν.'], asked: 'Ποια είναι η κατάσταση του build;' },
-  he: { reply: ['הבנייה עברה בהצלחה.', 'שני מבחנים נכשלו.'], asked: 'מה מצב הבנייה?' },
+  en: { reply: ['The build passed.', 'Two tests failed.'], asked: 'What is the build status?', table: table('Build', 'Tests', 'Passed', '2 failed') },
+  ja: { reply: ['ビルド成功です。', 'テスト2件が失敗。'], asked: 'ビルドの状態は？', table: table('ビルド', 'テスト', '成功', '2件失敗') },
+  ko: { reply: ['빌드가 통과했습니다.', '테스트 2개가 실패했습니다.'], asked: '빌드 상태가 어떤가요?', table: table('빌드', '테스트', '통과', '2개 실패') },
+  'zh-Hans': { reply: ['构建通过了。', '两个测试失败了。'], asked: '构建状态如何？', table: table('构建', '测试', '通过', '2 个失败') },
+  'zh-Hant': { reply: ['建置通過了。', '兩個測試失敗了。'], asked: '建置狀態如何？', table: table('建置', '測試', '通過', '2 個失敗') },
+  es: { reply: ['La compilación pasó.', 'Fallaron dos pruebas.'], asked: '¿Cuál es el estado de la compilación?', table: table('Compilación', 'Pruebas', 'Correcta', '2 fallidas') },
+  fr: { reply: ['La compilation a réussi.', 'Deux tests ont échoué.'], asked: "Quel est l'état de la compilation ?", table: table('Compilation', 'Tests', 'Réussie', '2 échecs') },
+  de: { reply: ['Der Build war erfolgreich.', 'Zwei Tests sind fehlgeschlagen.'], asked: 'Wie ist der Build-Status?', table: table('Build', 'Tests', 'Erfolgreich', '2 fehlgeschlagen') },
+  pt: { reply: ['A compilação passou.', 'Dois testes falharam.'], asked: 'Qual é o estado da compilação?', table: table('Compilação', 'Testes', 'Passou', '2 falharam') },
+  it: { reply: ['La build è riuscita.', 'Due test sono falliti.'], asked: 'Qual è lo stato della build?', table: table('Build', 'Test', 'Riuscita', '2 falliti') },
+  nl: { reply: ['De build is geslaagd.', 'Twee tests zijn mislukt.'], asked: 'Wat is de status van de build?', table: table('Build', 'Tests', 'Geslaagd', '2 mislukt') },
+  pl: { reply: ['Build się powiódł.', 'Dwa testy nie przeszły.'], asked: 'Jaki jest status builda?', table: table('Build', 'Testy', 'Udany', '2 nieudane') },
+  tr: { reply: ['Derleme başarılı oldu.', 'İki test başarısız oldu.'], asked: 'Derlemenin durumu nedir?', table: table('Derleme', 'Testler', 'Başarılı', '2 başarısız') },
+  vi: { reply: ['Bản build đã thành công.', 'Hai bài kiểm thử thất bại.'], asked: 'Trạng thái build thế nào?', table: table('Build', 'Kiểm thử', 'Thành công', '2 thất bại') },
+  id: { reply: ['Build berhasil.', 'Dua tes gagal.'], asked: 'Bagaimana status build-nya?', table: table('Build', 'Tes', 'Berhasil', '2 gagal') },
+  ru: { reply: ['Сборка прошла успешно.', 'Два теста не прошли.'], asked: 'Каков статус сборки?', table: table('Сборка', 'Тесты', 'Успешно', '2 не прошли') },
+  uk: { reply: ['Збірка пройшла успішно.', 'Два тести не пройшли.'], asked: 'Який статус збірки?', table: table('Збірка', 'Тести', 'Успішно', '2 не пройшли') },
+  ar: { reply: ['نجح البناء.', 'فشل اختباران.'], asked: 'ما حالة البناء؟', table: table('البناء', 'الاختبارات', 'نجح', 'فشل 2') },
+  hi: { reply: ['बिल्ड सफल रहा।', 'दो टेस्ट विफल हुए।'], asked: 'बिल्ड की स्थिति क्या है?', table: table('बिल्ड', 'टेस्ट', 'सफल', '2 विफल') },
+  th: { reply: ['บิลด์ผ่านแล้ว', 'การทดสอบสองรายการล้มเหลว'], asked: 'สถานะของบิลด์เป็นอย่างไร', table: table('บิลด์', 'การทดสอบ', 'ผ่าน', 'ล้มเหลว 2 รายการ') },
+  el: { reply: ['Το build ολοκληρώθηκε με επιτυχία.', 'Δύο τεστ απέτυχαν.'], asked: 'Ποια είναι η κατάσταση του build;', table: table('Build', 'Τεστ', 'Επιτυχία', '2 απέτυχαν') },
+  he: { reply: ['הבנייה עברה בהצלחה.', 'שני מבחנים נכשלו.'], asked: 'מה מצב הבנייה?', table: table('בנייה', 'מבחנים', 'עברה', '2 נכשלו') },
 }
 
 /** The sample in a language. Every language the plugin offers has one; the English one stands for any that does not. */
 export function sampleIn(language: Language): Sample {
   return SAMPLES[language.code] ?? (SAMPLES.en as Sample)
+}
+
+/**
+ * Whether the preview of an exchange has rows for its table. The band holds `maxRows` and scrolls past that,
+ * its top leaving the screen, so the list comes first: its rows, then a gap, the preview's title, five lines of
+ * the exchange (what Claude gets may take two) and a sentence. Where one language is behind its mark the
+ * sentence is the block shown open (a row more) and the table stays closed (a gap, five rows, its mark): 16.
+ * Where both languages always show there are two tables, each with a gap: 20. Short of that the preview keeps
+ * to two sentences. The rows were counted on a real screen.
+ */
+export function hasRoomForTable(maxRows: number, listRows: number, isBothShown: boolean): boolean {
+  return listRows + (isBothShown ? 20 : 16) <= maxRows
 }
 
 export function samplesOf(pair: Pair): { native: Sample; target: Sample } {
