@@ -4,6 +4,8 @@ English | [日本語](README.ja.md)
 
 **Learn a language while you work with Claude Code.**
 
+The pictures show a Japanese speaker learning English. Any two of 22 languages can be set.
+
 ![Ask in Japanese, read the answer in English, click for the Japanese](assets/hero.gif)
 
 Ask in your language. Read the answer in the one you are learning. Click when you are stuck.
@@ -54,7 +56,7 @@ From a shell:
 claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 ```
 
-Claude Code in a terminal is needed. The pictures show a Japanese speaker learning English, which is what you get with nothing set.
+Claude Code in a terminal is needed. With nothing set, your language is Japanese and the one you are learning is English; `/immerse` changes both.
 
 ---
 
