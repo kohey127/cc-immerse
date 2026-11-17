@@ -1,64 +1,42 @@
 # cc-immerse
 
-**Learn a language while you work in Claude Code. You pick how much of the conversation is in the language you are learning, and your own words always reach Claude as you wrote them.**
+**Learn a language while you work with Claude Code.**
 
-<!-- GIF 1 (hero): a reply in English; the pointer moves onto a paragraph, ▸ appears, a click opens the Japanese under it, a second click closes it. -->
+![Ask in Japanese, read the answer in English, click for the Japanese](assets/hero.gif)
 
-You already spend hours a day reading and writing with Claude Code. This turns those hours into practice, without a separate study session.
+Ask in your language. Read the answer in the one you are learning. Click when you are stuck.
 
-> **Status: early.** It works in the Claude Code terminal. It has been used daily for Japanese and English; 22 languages can be chosen, and the other pairs are covered by tests but not yet by real use. The levels are new and checked on a real screen by automated tests; they have not been through daily use yet.
+## Type in either language
 
-The examples below use a Japanese speaker learning English, the defaults.
+![Japanese gets its English, English gets its correction](assets/typing.gif)
 
-## Levels
+Your language is shown in English as you type. Your English is corrected. Nothing to switch.
 
-One setting decides how far in you are. It says two things at once: in which language you and Claude talk, and which language you read first.
+## Go at your own pace
 
-| Level | You and Claude talk in | What you type in Japanese | How you read the reply |
-| --- | --- | --- | --- |
-| 1 | Japanese | Sent as typed | Japanese. Click `▸` for the English |
-| 2 | Japanese | Sent as typed | Japanese on the left, the English beside it, grey |
-| 3 | English | Sent in English, with your Japanese beside it | English on the left, the Japanese beside it, grey |
-| **4 (default)** | English | Sent in English, with your Japanese beside it | English. Click `▸` for the Japanese |
+**Level 1.** You and Claude talk in your language. English is one click away.
 
-<!-- GIF 5: the same question at levels 1, 2, 3 and 4, one after the other. -->
+![Level 1](assets/level-1.png)
 
-- **Nothing you mean is lost.** At levels 1 and 2 Claude gets exactly what you typed. At levels 3 and 4 it gets the English version as your message and your own words beside it, so it answers in English and still knows what you meant.
-- **What you type in English is sent as typed at every level**, and corrected beside the conversation. Claude never sees the correction.
-- At levels 1 and 2 the English you see is a translation of Claude's Japanese answer. At levels 3 and 4 it is Claude's own English.
-- In a narrow window the two columns of levels 2 and 3 become one, the second language under the first.
-- Off leaves replies as they are.
+**Level 2.** The same, with the English beside it.
 
-### Reading a reply
+![Level 2](assets/level-2.png)
 
-<!-- GIF 2: ALL JA OPEN / ALL JA CLOSE on a reply with a paragraph, a list and a table. -->
+**Level 3.** You and Claude talk in English. Your language is beside it.
 
-- Move the pointer onto a paragraph, a list or a table: a `▸` appears beside its last line.
-- Click it: the other language for that block opens under it, in grey. Click `▾` to close it.
-- `▸▸ ALL JA OPEN` and `▾▾ ALL JA CLOSE` at the end of a message do the same for the whole message.
-- At levels 1 and 4 nothing is translated, or paid for, until you open it, as long as Claude answers in the language you read first. A reply in the other language is translated block by block so that you still read it in yours.
+![Level 3](assets/level-3.png)
 
-### Help while you type
+**Level 4.** English. Your language is one click away.
 
-<!-- GIF 3: typing Japanese, EN ▸ appears above the prompt, Enter sends, ↳ shows the English under the message. -->
-<!-- GIF 4: typing English with a mistake, FIX ▸ appears, Enter sends the text as typed, ↳ shows the correction and the notes. -->
+![Level 4](assets/level-4.png)
 
-| You type | While you type | Under your sent message |
-| --- | --- | --- |
-| Japanese | `EN ▸` how it reads in English | At levels 3 and 4, `↳` the English that was sent |
-| English | `FIX ▸` your sentence as it would read corrected | `↳` the corrected sentence, then short notes in Japanese |
+At 3 and 4 your own words still go with every message, so nothing you mean is lost.
 
-This help has a switch of its own.
+## One screen of settings
 
-## Settings
+![/immerse: a list, the arrow keys, and a preview that follows](assets/settings.gif)
 
-Type `/immerse`. The settings appear above the prompt box as a list, the way `/config` lists its own: your language, the language you are learning, the level, and help while typing.
-
-- **↑ and ↓ move, Enter changes the row, ← goes back.** They work the moment the list opens. A number presses the row beside it.
-- **Under the list, a preview follows the keyboard.** For a level it shows the exchange at that level: what you type, what Claude gets, and the reply as you will read it.
-- A change is in force at once and the list stays. Typing a message closes it.
-
-<!-- GIF 6: /immerse, the list worked by the keyboard, the preview following it, the next reply drawn at the level picked. -->
+Type `/immerse`. Arrows move, Enter changes, and the preview shows what you will get. 22 languages.
 
 ## Install
 
@@ -74,7 +52,12 @@ From a shell:
 claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 ```
 
-## Commands
+Claude Code in a terminal is needed. The pictures show a Japanese speaker learning English, which is what you get with nothing set.
+
+---
+
+<details>
+<summary>Commands</summary>
 
 | Command | What it does |
 | --- | --- |
@@ -84,14 +67,19 @@ claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 | `/immerse open` | Opens the translation for every block of the latest reply |
 | `/immerse close` | Closes every open translation |
 
-## What it costs
+</details>
+
+<details>
+<summary>Cost and limits</summary>
+
+**What it costs**
 
 Translations and corrections run on Claude Haiku through your own Claude Code account.
 
 - At levels 1 and 4 a reply costs nothing until you open a block, when it is in the language you read first. At levels 2 and 3, and for a reply in the other language, each block is one small call.
 - With help while typing on, a draft costs one small call each time you pause.
 
-## Limits
+**Limits**
 
 - **Terminal only.** In tests, the phone and desktop apps showed nothing. The reason is not known yet.
 - **Pairs that share an alphabet cost one more wait.** Japanese and English are told apart by their letters, at once. Spanish and English are not, so the small model is asked which language a message is in before it is sent.
@@ -101,12 +89,17 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 - **Paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different, and links inside them cannot be clicked.
 - Built on Claude Code's plugin API for interface mods, which is early access and may change between releases.
 
-## Roadmap
+</details>
 
-- Instructions to the small model that you can edit.
-- The plugin counting how often you open the translation, and suggesting the next level.
+<details>
+<summary>Status</summary>
 
-## Development
+Early. It has been used daily for Japanese and English. The other languages are covered by tests, not yet by daily use. The pictures above are recorded from a real Claude Code screen with scripted replies (`screen/record.ts`).
+
+</details>
+
+<details>
+<summary>Development and prior work</summary>
 
 The plugin is in `plugin/`. `CLAUDE.md` describes the layout, the checks and how the work is done.
 
@@ -116,10 +109,8 @@ claude plugin test plugin
 cd screen && bun install && bun test   # checks on a real screen
 ```
 
-## Prior work
-
 [cc-trans](https://github.com/ktk1012/cc-trans) and [Lingo](https://github.com/royisme/lingo) translate Claude Code conversations, and trying them led to this plugin. They show your own language next to the English. cc-immerse keeps the English in front and shows your language only when you ask, so that you read the English first. The live preview while you type follows the approach cc-trans takes.
 
-## License
+</details>
 
 MIT
