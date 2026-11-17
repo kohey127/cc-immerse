@@ -134,4 +134,6 @@ cd screen && bun install && bun test   # 実画面でのチェック
 
 </details>
 
+役に立ったら、スターを付けてもらえると、ほかの人が見つけやすくなります。
+
 MIT

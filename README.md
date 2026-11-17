@@ -134,4 +134,6 @@ cd screen && bun install && bun test   # checks on a real screen
 
 </details>
 
+If this is useful to you, a star helps other people find it.
+
 MIT
