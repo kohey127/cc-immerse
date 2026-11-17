@@ -4,35 +4,35 @@ English | [日本語](README.ja.md)
 
 **Learn a language while you work with Claude Code.**
 
-The pictures show a Japanese speaker learning English. Any two of 22 languages can be set.
+The pictures show an English speaker learning Spanish. Any two of 22 languages can be set.
 
-![Ask in Japanese, read the answer in English, click for the Japanese](assets/hero.gif)
+![Ask in English, read the answer in Spanish, click for the English](assets/en-es/hero.gif)
 
 Ask in your language. Read the answer in the one you are learning. Click when you are stuck.
 
 ## Type in either language
 
-![Japanese gets its English, English gets its correction](assets/typing.gif)
+![English gets its Spanish, Spanish gets its correction](assets/en-es/typing.gif)
 
-Your language is shown in English as you type. Your English is corrected. Nothing to switch.
+Type in your language and see it in Spanish. Type in Spanish and see it corrected. Nothing to switch.
 
 ## Go at your own pace
 
-**Level 1.** You and Claude talk in your language. English is one click away.
+**Level 1.** You and Claude talk in your language. Spanish is one click away.
 
-![Level 1](assets/level-1.png)
+![Level 1](assets/en-es/level-1.png)
 
-**Level 2.** The same, with the English beside it.
+**Level 2.** The same, with the Spanish beside it.
 
-![Level 2](assets/level-2.png)
+![Level 2](assets/en-es/level-2.png)
 
-**Level 3.** You and Claude talk in English. Your language is beside it.
+**Level 3.** You and Claude talk in Spanish. Your language is beside it.
 
-![Level 3](assets/level-3.png)
+![Level 3](assets/en-es/level-3.png)
 
-**Level 4.** English. Your language is one click away.
+**Level 4.** Spanish. Your language is one click away.
 
-![Level 4](assets/level-4.png)
+![Level 4](assets/en-es/level-4.png)
 
 ## Nothing you mean is lost
 
@@ -41,20 +41,20 @@ A translation can miss what you meant. So Claude never gets a translation alone.
 | Level | What Claude gets |
 | --- | --- |
 | 1, 2 | Exactly what you typed |
-| 3, 4 | The English version as your message, with your own words beside it |
+| 3, 4 | The Spanish version as your message, with your own words beside it |
 
 ```
-What is the build status?            ← your message, in English
-<original-message language="Japanese">
-ビルドの状態は？                       ← what you typed, kept beside it
+¿Cuál es el estado de la compilación?   ← your message, in Spanish
+<original-message language="English">
+What is the build status?               ← what you typed, kept beside it
 </original-message>
 ```
 
-Where the two differ, Claude goes by your own words: with an English version made wrong on purpose, it followed the original in 3 of 3 tries. What you type in English is sent as typed; the correction is shown to you, not to Claude.
+Where the two differ, Claude goes by your own words: with a translation made wrong on purpose, it followed the original in 3 of 3 tries (measured with Japanese and English). What you type in Spanish is sent as typed; the correction is shown to you, not to Claude.
 
 ## One screen of settings
 
-![/immerse: a list, the arrow keys, and a preview that follows](assets/settings.gif)
+![/immerse: a list, the arrow keys, and a preview that follows](assets/en-es/settings.gif)
 
 Type `/immerse`. Arrows move, Enter changes, and the preview shows what you will get. 22 languages.
 
@@ -72,7 +72,7 @@ From a shell:
 claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 ```
 
-Claude Code in a terminal is needed. With nothing set, your language is Japanese and the one you are learning is English; `/immerse` changes both.
+Claude Code in a terminal is needed. Then type `/immerse` and pick your two languages: with nothing set, your language is Japanese and the one you are learning is English.
 
 ---
 
@@ -102,6 +102,7 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 **Limits**
 
 - **Terminal only.** In tests, the phone and desktop apps showed nothing. The reason is not known yet.
+- **In a pair that shares an alphabet, a reply's language cannot be told by its letters.** It is taken to be in the language you and Claude talk in at your level.
 - **Pairs that share an alphabet cost one more wait.** Japanese and English are told apart by their letters, at once. Spanish and English are not, so the small model is asked which language a message is in before it is sent.
 - **A message in a third language is left alone**: sent as typed, with no translation and no correction.
 - **At levels 3 and 4 Claude is told, beside your message, to answer in the language you are learning.** Without that it answers in the language of your own words, which it can see. This is the one place the plugin says anything to Claude.
@@ -114,7 +115,7 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 <details>
 <summary>Status</summary>
 
-Early. It has been used daily for Japanese and English. The other languages are covered by tests, not yet by daily use. The pictures above are recorded from a real Claude Code screen with scripted replies (`screen/record.ts`).
+Early. It has been used daily for Japanese and English. The other languages, Spanish included, are covered by tests, not yet by daily use. The pictures above are recorded from a real Claude Code screen with scripted replies (`screen/record.ts`).
 
 </details>
 
