@@ -7,7 +7,7 @@ import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
 import { isWithClaudeInTarget, levelOf, readSettings } from './settings'
 import type { Settings } from './settings'
-import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap } from './text'
+import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap, wrappedTableLines } from './text'
 import type { Chunk, Piece } from './text'
 
 const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
@@ -430,7 +430,8 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
   )
   /** A text holding a table or code, drawn faint: a table from rows of text, since the engine's own keeps the reply's colour. */
   const behindBlock = (text: string, isTableText: boolean) => {
-    const table = isTableText ? tableLines(text, columns - 4) : null
+    // A table that fits is drawn as it is; a wider one with its cells wrapped. Both by the plugin, so both grey.
+    const table = isTableText ? (tableLines(text, columns - 4) ?? wrappedTableLines(text, columns - 4)) : null
     if (table) {
       return (
         <Box flexDirection="column">

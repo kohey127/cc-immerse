@@ -3,7 +3,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { pairOf } from '../hooks/lang'
-import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap } from '../hooks/text'
+import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap, wrappedTableLines } from '../hooks/text'
 
 const JA_EN = pairOf('Japanese', 'English')
 const ES_EN = pairOf('Spanish', 'English')
@@ -263,4 +263,32 @@ test('a table wider than half the window is not put beside the other: both go on
   const ja = '| ビルド | テスト |\n| --- | --- |\n| 成功 | 2件失敗 |'
   expect(tablesBeside(en, ja, 12)).toBe(null)
   expect(tablesBeside('Not a table.', ja, 40)).toBe(null)
+})
+
+// Seen on the author's screen: a wide table opened to a translation at full brightness. A table wider than
+// the window was handed to Claude Code to draw, which draws it in the reply's own colour.
+test('regression: a table wider than the window is drawn by the plugin too, its cells wrapped to fit', async () => {
+  const src = '| Role | Result | What was missing |\n| --- | --- | --- |\n| Repository Services | Passed | Only Go, Kubernetes, Rust and gRPC, and all of them are helpful or examples |'
+  expect(tableLines(src, 50)).toBeNull()
+  const lines = wrappedTableLines(src, 50) ?? []
+  expect(lines.length).toBeGreaterThan(5)
+  // Every row fits, the borders line up, and no word is lost.
+  for (const line of lines) expect(widthOf(line) <= 50).toBe(true)
+  expect(new Set(lines.map(line => widthOf(line))).size).toBe(1)
+  expect(lines[0]?.startsWith('┌')).toBe(true)
+  expect(lines.at(-1)?.startsWith('└')).toBe(true)
+  const words = lines.join(' ').replace(/[│┌┐└┘├┤┬┴┼─]/g, ' ').split(/\s+/).filter(Boolean)
+  for (const word of ['Repository', 'Services', 'Passed', 'Kubernetes,', 'examples']) expect(words).toContain(word)
+})
+
+test('a cell\'s Markdown marks are drawn out of a wrapped table, and a table that fits is left to tableLines', async () => {
+  const lines = wrappedTableLines('| Role | Why |\n| --- | --- |\n| **Repository Services** | See `tracker.md` and the [notes](notes.md) for the whole of the reasoning here |', 40) ?? []
+  const drawn = lines.join('\n')
+  expect(drawn.includes('**')).toBe(false)
+  expect(drawn.includes('`')).toBe(false)
+  expect(drawn.includes('](')).toBe(false)
+  expect(drawn).toContain('tracker.md')
+  // Too narrow for even four columns a cell, and a text with no table: null.
+  expect(wrappedTableLines('| A | B | C | D |\n| --- | --- | --- | --- |\n| 1 | 2 | 3 | 4 |', 12)).toBeNull()
+  expect(wrappedTableLines('Only a sentence.', 80)).toBeNull()
 })

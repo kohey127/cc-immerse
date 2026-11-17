@@ -133,3 +133,19 @@ test('regression: a translation still in another language after the second try i
   expect((await ui.findAll({ type: 'Text', text: /Repository Services/ })).length).toBe(0)
   await ui.unmount()
 })
+
+test('regression: a wide table opens to a translation in grey rows the plugin draws, not to a table drawn by Claude Code', async ($, on) => {
+  const clock = mock.clock(on)
+  const wide = '| Role | Result | What was missing |\n| --- | --- | --- |\n| Repository Services | Passed | Only Go, Kubernetes, Rust and gRPC, and all of them are helpful or examples in the list of the keywords |'
+  const wideJa = '| 職種 | 結果 | 足りなかったもの |\n| --- | --- | --- |\n| リポジトリサービス | 通過 | Go、Kubernetes、Rust、gRPC だけで、いずれもキーワード一覧では「あれば望ましい」か例示の扱いでした。ほかの必須要件はすべて職務経歴書と一致していました |'
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: wideJa, usage: USAGE } }))
+  const ui = await $.ui.mount(reply(wide))
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  const behind = ((await ui.findAll({ type: 'Text' })) as any[]).filter(t => /通過|リポジトリ/.test(t.text))
+  expect(behind.length).toBeGreaterThan(0)
+  for (const row of behind) expect(row.props.dimColor).toBe(true)
+  expect(await ui.find({ type: 'Markdown', text: /通過/ })).toBeUndefined()
+  await ui.unmount()
+})

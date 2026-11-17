@@ -67,6 +67,74 @@ export function tableLines(src: string, max: number): string[] | null {
   return hasTable ? out : null
 }
 
+/** The narrowest a column of a wrapped table is made. */
+const NARROWEST = 4
+
+/**
+ * A text holding a Markdown table, as rows of text no wider than `max`, each cell wrapped to its column:
+ * for a table too wide for `tableLines`. A cell's Markdown marks are taken out, since rows of text draw
+ * none. Null when the text holds no table or `max` has no room for the columns.
+ *
+ * With this a translated table of any width is drawn by the plugin, in the translation's grey. Claude Code's
+ * own table keeps the reply's colour.
+ */
+export function wrappedTableLines(src: string, max: number): string[] | null {
+  const out: string[] = []
+  const lines = src.split('\n')
+  let hasTable = false
+  for (let i = 0; i < lines.length; ) {
+    if (!cellsOf(lines[i] ?? '')) {
+      out.push(lines[i++] ?? '')
+      continue
+    }
+    const rows: string[][] = []
+    let hasHeader = false
+    for (; i < lines.length; i++) {
+      const cells = cellsOf(lines[i] ?? '')
+      if (!cells) break
+      const isRule = cells.every(cell => /^:?-+:?$/.test(cell))
+      if (isRule) hasHeader = rows.length === 1
+      else rows.push(cells.map(cell => piecesOf(cell).map(piece => piece.text).join('')))
+    }
+    if (rows.length === 0) continue
+    hasTable = true
+    const count = Math.max(...rows.map(row => row.length))
+    const widths = Array.from({ length: count }, (_, k) => Math.max(1, ...rows.map(row => widthOf(row[k] ?? ''))))
+    // The widest column gives way first, a column at a time, until the table fits.
+    const room = max - (3 * count + 1)
+    for (let sum = widths.reduce((a, b) => a + b, 0); sum > room; sum--) {
+      const widest = widths.indexOf(Math.max(...widths))
+      if ((widths[widest] ?? 0) <= NARROWEST) return null
+      widths[widest] = (widths[widest] ?? 0) - 1
+    }
+    const rule = (left: string, mid: string, right: string): string => left + widths.map(w => '─'.repeat(w + 2)).join(mid) + right
+    out.push(rule('┌', '┬', '┐'))
+    rows.forEach((row, r) => {
+      const cells = widths.map((w, k) => {
+        const laid = wrap([{ text: row[k] ?? '', kind: 'plain' }], w).map(pieces =>
+          pieces
+            .map(piece => piece.text)
+            .join('')
+            .trimEnd(),
+        )
+        return laid.length > 0 ? laid : ['']
+      })
+      const height = Math.max(...cells.map(cell => cell.length))
+      for (let line = 0; line < height; line++) {
+        const drawn = widths.map((w, k) => {
+          const text = cells[k]?.[line] ?? ''
+          const spare = Math.max(0, w - widthOf(text))
+          const before = r === 0 && hasHeader ? Math.floor(spare / 2) : 0
+          return ` ${' '.repeat(before)}${text}${' '.repeat(spare - before)} `
+        })
+        out.push(`│${drawn.join('│')}│`)
+      }
+      out.push(r === rows.length - 1 ? rule('└', '┴', '┘') : rule('├', '┼', '┤'))
+    })
+  }
+  return hasTable ? out : null
+}
+
 export function hash(text: string): string {
   let h = 5381
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
