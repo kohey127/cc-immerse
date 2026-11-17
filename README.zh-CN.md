@@ -130,6 +130,11 @@ claude plugin update cc-immerse
 
 早期阶段。日语和英语的组合每天都在使用。其他语言（包括中文）有测试覆盖，但还没有经过日常使用。上面的图片是用预设的回复，从真实的 Claude Code 屏幕录制的（`screen/record.ts`）。本页的中文尚未经母语者校对，欢迎指正。
 
+已收录于社区的 Claude Code mod 目录，该目录会扫描 mod 能访问什么以及是否通过校验：
+
+[![reach](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-reach.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+
 </details>
 
 <details>

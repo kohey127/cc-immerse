@@ -130,6 +130,11 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 
 Early. It has been used daily for Japanese and English. The other languages, Spanish included, are covered by tests, not yet by daily use. The pictures above are recorded from a real Claude Code screen with scripted replies (`screen/record.ts`).
 
+Listed in the community catalogue of Claude Code mods, which scans what a mod can access and whether it validates:
+
+[![reach](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-reach.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+[![validates](https://raw.githubusercontent.com/karanb192/awesome-claude-code-mods/main/badges/kohey127--cc-immerse--cc-immerse-validates.svg)](https://mods.aidojo.si/mods/kohey127--cc-immerse--cc-immerse/)
+
 </details>
 
 <details>
