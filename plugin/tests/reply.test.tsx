@@ -113,3 +113,23 @@ test('regression: a translation that kept its Markdown is drawn as the reply is,
   expect(drawn.includes('`')).toBe(false)
   await ui.unmount()
 })
+
+// Seen on the author's screen: a table opened to the same English table, shown as its translation.
+test('regression: a translation still in another language after the second try is not shown; the block says so', async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  const table = '| Role | Result |\n| --- | --- |\n| Repository Services | Passed after the first interview |'
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: table, usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply(table))
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  expect(calls).toBe(2)
+  expect(await ui.find({ type: 'Text', text: /✗ .*Japanese/ })).toBeDefined()
+  // The table is on the screen once, as the reply, and not a second time as its own translation.
+  expect((await ui.findAll({ type: 'Text', text: /Repository Services/ })).length).toBe(0)
+  await ui.unmount()
+})

@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
-import { againSystem, asText, fixSystem, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
+import { againFixSystem, againSystem, asText, fixSystem, isFixMalformed, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
 import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
@@ -105,7 +105,7 @@ async function prepare($: EngineInterface, text: string, language: 'native' | 'u
   if (settings.send === 'off' && settings.correct === 'off') return 'asTyped'
   const judged = readJudgement(await ask($, judgeSystem(pair), text))
   if (judged.kind === 'native' && settings.send !== 'off') return { target: judged.target }
-  if (judged.kind === 'target' && settings.correct !== 'off') await $.state.set({ ...TR, id: fixId(text) }, { status: 'done', text: judged.fix })
+  if (judged.kind === 'target' && settings.correct !== 'off' && !isFixMalformed(judged.fix, text, pair)) await $.state.set({ ...TR, id: fixId(text) }, { status: 'done', text: judged.fix })
   return 'asTyped'
 }
 
@@ -304,10 +304,24 @@ async function translate($: EngineInterface, src: string, id: string = trId(src)
     const asked = system ?? (isTable(src) ? tableSystem(into) : translateSystem(into))
     const call = (instruction: string) => $.model.complete({ model: 'haiku', system: instruction, prompt: asText(src), maxTokens: 2000, effort: 'low', timeoutMs: 45000 })
     let r = await call(asked)
-    // An answer in another language is asked for once more, saying which language it must be in. The second
-    // answer stands whatever it is: there is no third try.
-    if (r.isAnswered && !system && isMistranslated(r.text, into)) r = await call(againSystem(asked, into))
-    next = r.isAnswered ? { status: 'done', text: r.text.trim() } : { status: 'error', text: r.reason }
+    // An answer in another language is asked for once more, saying which language it must be in. There is no
+    // third try: a second answer still in another language is not shown as a translation, and the block says
+    // so (and is asked for again when next opened). A text with nothing to translate comes back as it was,
+    // and that stands; a table handed back unchanged does not.
+    let isWrong = false
+    if (r.isAnswered && !system && isMistranslated(r.text, into)) {
+      r = await call(againSystem(asked, into))
+      isWrong = r.isAnswered && isMistranslated(r.text, into) && (isTable(src) || r.text.trim() !== src.trim())
+    }
+    // A correction (the one call made with an instruction of its own) that came back as something else is
+    // asked for once more too. Still not a correction, it is kept as nothing to show: commentary in the
+    // learned language is never put where the corrected sentence goes.
+    let text = r.isAnswered ? r.text.trim() : ''
+    if (r.isAnswered && system && isFixMalformed(text, src, pair)) {
+      r = await call(againFixSystem(system, pair))
+      text = r.isAnswered ? (isFixMalformed(r.text, src, pair) ? 'SKIP' : r.text.trim()) : ''
+    }
+    next = isWrong ? { status: 'error', text: `not translated into ${into.native.name}` } : r.isAnswered ? { status: 'done', text } : { status: 'error', text: r.reason }
   } catch (err) {
     next = { status: 'error', text: (err instanceof Error ? err.message : String(err)).slice(0, 80) }
   }

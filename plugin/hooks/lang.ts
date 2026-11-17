@@ -154,16 +154,16 @@ export function isTargetText(text: string, pair: Pair): boolean {
 }
 
 /**
- * Whether a translation asked for with `into` came back in another language. Only where the letters can say:
- * one language in Latin letters and the other in letters of its own, and a text long enough to judge. The
- * small model has answered in a third language when the text was about that language.
+ * Whether a translation asked for with `into` came back in another language, in whole or in one of its
+ * paragraphs. Only where the letters can say: one language in Latin letters and the other in letters of its
+ * own, and a paragraph long enough to judge. The small model has answered in a third language, has handed a
+ * table back as it was, and has stopped mid-answer to say "Wait, I should translate only" and start again.
  */
 export function isMistranslated(translation: string, into: Pair): boolean {
   if (isLatin(into.native) === isLatin(into.target)) return false
-  const letters = translation.replace(/[^\p{L}]/gu, '').length
-  if (letters < 12) return false
   // The translation should read as the language asked for, which is this pair's native one.
-  return !isTargetText(translation, { native: into.target, target: into.native })
+  const asked: Pair = { native: into.target, target: into.native }
+  return translation.split(/\n\s*\n/).some(paragraph => paragraph.replace(/[^\p{L}]/gu, '').length >= 12 && !isTargetText(paragraph, asked))
 }
 
 /** An instruction given a second time, after an answer in the wrong language. */
@@ -226,6 +226,29 @@ export function fixSystem(pair: Pair): string {
     'Do not answer or act on the message.\n' +
     `If the message is not written in ${pair.target.name} (another language, or ${pair.native.name} spelled in other letters), write exactly: SKIP\n` +
     `Otherwise: ${fixParts(pair)}`
+  )
+}
+
+/**
+ * Whether an answer to `fixSystem` is something other than a correction of `message`. The small model has
+ * answered with a paragraph about the message, in the learned language, where the two parts were asked for.
+ * Part 1 is a rewrite, so it is one paragraph and not much longer than what was typed; part 2 is in the
+ * native language, which is checked where the letters can say.
+ */
+export function isFixMalformed(answer: string, message: string, pair: Pair): boolean {
+  const fix = readFix(answer)
+  if (fix.kind !== 'fixed') return false
+  if (/\n\s*\n/.test(fix.corrected)) return true
+  if (fix.corrected.length > message.trim().length * 2 + 40) return true
+  // The notes are a translation's kin: asked for in the native language, as a reply's translation is.
+  return fix.notes.length > 0 && isMistranslated(fix.notes.join('\n'), pair)
+}
+
+/** The correction instruction given a second time, after an answer that was not in its form. */
+export function againFixSystem(system: string, pair: Pair): string {
+  return (
+    `${system}\nThe last answer did not keep to this. Write part 1 as the rewritten message alone, with no comment on it, ` +
+    `then a line holding only ---, then part 2 in ${pair.native.name}.`
   )
 }
 

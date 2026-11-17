@@ -111,3 +111,48 @@ test('shared alphabet with nothing to do either way costs no model call', { opti
   expect(received).toBe(TYPED)
   expect(calls).toBe(0)
 })
+
+// Seen on the author's screen: commentary in English where the correction should have been.
+const CHATTY = 'The message is in English, and it is not quite natural. "Want to testing" should be "want to test", and the sentence needs a full stop at its end. A natural version would be:\n\nI want to test the correction feature with this sentence.'
+const GOOD = 'I want to test the correction feature with this sentence.\n---\n- want to のあとは動詞の原形'
+
+const typedMessage = (text: string) =>
+  ({ plugin: 'cc-immerse', component: 'UserMessage', requestId: 'u1', surface: 'terminal', props: { text, origin: { kind: 'composer' }, isExpanded: false }, viewport: { columns: 80, rows: 40 } }) as const
+
+test('regression: a correction that came back as commentary is asked for once more, and the second answer is what is shown', async ($, on) => {
+  const clock = mock.clock(on)
+  const systems: string[] = []
+  on('model.complete', (_: unknown, e: { system?: string }) => {
+    systems.push(String(e.system))
+    return { value: { isAnswered: true as const, text: systems.length === 1 ? CHATTY : GOOD, usage: USAGE } }
+  })
+  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  await ($ as any).prompt.submit({ text: ENGLISH })
+  await clock.advance(10)
+  await clock.settle()
+  expect(systems.length).toBe(2)
+  expect(systems[1]).toContain('part 2 in Japanese')
+  const ui = await $.ui.mount(typedMessage(ENGLISH))
+  expect(await ui.find({ type: 'Text', text: 'I want to test the correction feature with this sentence.' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /want to のあとは動詞の原形/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /not quite natural/ })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('regression: commentary twice over shows nothing, never the commentary', async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: CHATTY, usage: USAGE } }
+  })
+  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  await ($ as any).prompt.submit({ text: ENGLISH })
+  await clock.advance(10)
+  await clock.settle()
+  expect(calls).toBe(2)
+  const ui = await $.ui.mount(typedMessage(ENGLISH))
+  expect(await ui.find({ type: 'Text', text: /not quite natural/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /↳/ })).toBeUndefined()
+  await ui.unmount()
+})

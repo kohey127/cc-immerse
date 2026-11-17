@@ -2,7 +2,7 @@
 // small model is asked. Written before hooks/lang.ts existed.
 import { expect, test } from 'claude-code/testing'
 
-import { againSystem, classify, fixSystem, isMistranslated, isTargetText, judgeSystem, languageByName, pairOf, readFix, readJudgement, toTargetSystem, translateSystem } from '../hooks/lang'
+import { againFixSystem, againSystem, classify, fixSystem, isFixMalformed, isMistranslated, isTargetText, judgeSystem, languageByName, pairOf, readFix, readJudgement, toTargetSystem, translateSystem } from '../hooks/lang'
 
 const JA_EN = pairOf('Japanese', 'English')
 const KO_EN = pairOf('Korean', 'English')
@@ -173,4 +173,41 @@ test('asking again says which language the answer must be in', async () => {
   const again = againSystem(translateSystem(pair), pair)
   expect(again.startsWith(translateSystem(pair))).toBe(true)
   expect(again).toContain('must be in Japanese')
+})
+
+// Seen on the author's screen: typed "cafe is also ok if there is no suitable one.", and the line above the
+// prompt box held a paragraph of commentary in English, where the corrected sentence should have been.
+test('regression: an answer that is commentary, or whose notes are not in the native language, is not a correction', async () => {
+  const pair = pairOf('Japanese', 'English')
+  const typed = 'cafe is also ok if there is no suitable one.'
+  const chatty =
+    'The message is in English, and it is not quite natural. "Also ok" is a bit terse, and "if there is no suitable one" reads better as "if there isn\'t a suitable one" or "if nothing suitable is available." A natural version would be:\n\nCafes are also fine if there isn\'t a suitable option.'
+  expect(isFixMalformed(chatty, typed, pair)).toBe(true)
+  // The two parts, but the notes in English.
+  expect(isFixMalformed("Cafes are also fine if there isn't a suitable option.\n---\n- \"ok\" is terse here, \"fine\" reads more naturally\n- \"one\" is vague, so say what it stands for", typed, pair)).toBe(true)
+  // As asked for.
+  expect(isFixMalformed("Cafes are also fine if there isn't a suitable option.\n---\n- ok より fine が自然\n- one が何を指すか曖昧なので option に", typed, pair)).toBe(false)
+  expect(isFixMalformed('OK', typed, pair)).toBe(false)
+  expect(isFixMalformed('SKIP', typed, pair)).toBe(false)
+  // A rewrite somewhat longer than what was typed is still a rewrite.
+  expect(isFixMalformed("A cafe is also fine if there isn't a suitable place nearby.\n---\n- 冠詞 a が必要", typed, pair)).toBe(false)
+})
+
+test('asking again for a correction names the form and the language of the notes', async () => {
+  const pair = pairOf('Japanese', 'English')
+  const again = againFixSystem(fixSystem(pair), pair)
+  expect(again.startsWith(fixSystem(pair))).toBe(true)
+  expect(again).toContain('part 2 in Japanese')
+})
+
+// Seen on the author's screen under a one-line block: the small model translated, then wrote "Wait, I should
+// translate only. Corrected:" and translated again, and all three paragraphs were shown as the translation.
+test('regression: a translation with a paragraph in another language among its own is known as wrong', async () => {
+  const pair = pairOf('Japanese', 'English')
+  const answer = '以下の役割が以前とは違っていた理由は三つあった。\n\nWait, I should translate only. Corrected:\n\nその役割を以前とは違うものにした要因'
+  expect(isMistranslated(answer, pair)).toBe(true)
+  // A heading and its paragraph, both in Japanese, are two paragraphs and fine.
+  expect(isMistranslated('変更点\n\n両方の言語が常に表示される場合、表は左右に並びます。', pair)).toBe(false)
+  // A short line in Latin letters between them (a command, a name) is not a paragraph of prose.
+  expect(isMistranslated('次のコマンドを実行します。\n\nbun test\n\nすべて通れば完了です。', pair)).toBe(false)
 })
