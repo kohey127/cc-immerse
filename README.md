@@ -1,6 +1,6 @@
 # cc-immerse
 
-English | [日本語](README.ja.md)
+English | [日本語](README.ja.md) | [简体中文](README.zh-CN.md)
 
 **Learn a language while you work with Claude Code.**
 

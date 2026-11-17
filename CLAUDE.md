@@ -23,7 +23,7 @@ If `notes/HANDOFF.md` exists (it is local, not in git), read it first: it holds 
 | `screen/` | Checks on a real screen. Not shipped. A real Claude Code runs in a scripted terminal with the plugin loaded and a stand-in for the model |
 | `screen/term.ts` | Starts the session and gives a scenario its hands and eyes: type, move the pointer, click, read text, read each cell's colour and style, take a picture, record |
 | `screen/model.ts` | The stand-in for the model: every reply and every small-model answer is written in the scenario, so a run is the same each time and costs nothing |
-| `screen/record.ts` | Makes the READMEs' pictures from a real screen, one set per reader in `assets/<set>/`: `ja-en` for `README.ja.md`, `en-es` for `README.md`. `bun screen/record.ts`, or a set and then a scene after it (`en-es hero`); needs ffmpeg. Each picture is cut down to the exchange, and the pointer is drawn on (`screen/pointer.png`), since a terminal draws none. Run it again after a change to what is drawn |
+| `screen/record.ts` | Makes the READMEs' pictures from a real screen, one set per reader in `assets/<set>/`: `ja-en` for `README.ja.md`, `zh-en` for `README.zh-CN.md`, `en-es` for `README.md`. `bun screen/record.ts`, or a set and then a scene after it (`en-es hero`); needs ffmpeg. Each picture is cut down to the exchange, and the pointer is drawn on (`screen/pointer.png`), since a terminal draws none. Run it again after a change to what is drawn |
 | `screen/scenarios/` | One file per scenario. Each comes from a recording the README needs or from a bug the author caught by eye |
 
 ## Checks, run before saying anything is done
