@@ -74,6 +74,19 @@ claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 
 ターミナルで動く Claude Code が必要です。何も設定しなければ、母語は日本語、学習中の言語は英語です。どちらも `/immerse` で変えられます。
 
+## 更新
+
+自動更新を一度だけ有効にしてください。`/plugin` の Marketplaces で、`cc-immerse` の auto-update をオンにします。以後、新しいバージョンは Claude Code の起動時に入ります。
+
+手動で更新する場合:
+
+```sh
+claude plugin marketplace update cc-immerse
+claude plugin update cc-immerse
+```
+
+更新後は Claude Code を再起動してください。
+
 ---
 
 <details>

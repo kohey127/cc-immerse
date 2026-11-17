@@ -74,6 +74,19 @@ claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 
 需要在终端中运行的 Claude Code。安装后输入 `/immerse`，选择你的两种语言：不做任何设置时，母语是日语，学习的语言是英语。
 
+## 更新
+
+请先开启一次自动更新：在 `/plugin` 的 Marketplaces 中，为 `cc-immerse` 打开 auto-update。之后新版本会在 Claude Code 启动时自动安装。
+
+手动更新：
+
+```sh
+claude plugin marketplace update cc-immerse
+claude plugin update cc-immerse
+```
+
+更新后请重启 Claude Code。
+
 ---
 
 <details>

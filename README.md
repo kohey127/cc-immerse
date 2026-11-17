@@ -74,6 +74,19 @@ claude plugin install cc-immerse --marketplace kohey127/cc-immerse
 
 Claude Code in a terminal is needed. Then type `/immerse` and pick your two languages: with nothing set, your language is Japanese and the one you are learning is English.
 
+## Updating
+
+Turn on automatic updates once: in `/plugin`, under Marketplaces, switch on auto-update for `cc-immerse`. New versions then arrive when Claude Code starts.
+
+To update by hand:
+
+```sh
+claude plugin marketplace update cc-immerse
+claude plugin update cc-immerse
+```
+
+Restart Claude Code afterwards.
+
 ---
 
 <details>

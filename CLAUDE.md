@@ -51,6 +51,7 @@ They write pictures and recordings to `screen/out/` (not in git). Look at the pi
 - **What the plugin does with nothing set does not change** unless the author says so. `tests/settings.test.ts` pins it.
 - **Logic goes in the pure files.** `register.tsx` holds wiring and drawing; anything that can be decided from a string belongs in `lang.ts`, `text.ts` or `settings.ts`, where it is tested without the engine.
 - **The small model's instructions live in `lang.ts` only**, and the text handed to it is always wrapped by `asText`, so a short text is not read as a message to answer.
+- **A push that changes anything under `plugin/` raises `version` in `plugin/.claude-plugin/plugin.json`**, and a release with that tag follows. Claude Code keeps an installed plugin by its version and offers an update only when the number has gone up; with the number unchanged, people who installed it keep the old code. The description there is the one the mods catalogue shows, so it says what the repository's About says.
 - Commit and push only when the author says so. Commits are small, one concern each, with a message that says what changed for the user.
 
 ## Things the plugin API taught us
