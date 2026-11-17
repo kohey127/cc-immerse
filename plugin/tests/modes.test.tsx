@@ -208,3 +208,33 @@ test('Faint italic, the default: an open translation is dim and italic', async (
   expect([translation?.props.dimColor, translation?.props.italic]).toEqual([true, true])
   await ui.unmount()
 })
+
+const TABLE = '| Build | Tests |\n| --- | --- |\n| Passed | 2 failed |'
+const TABLE_JA = '| ビルド | テスト |\n| --- | --- |\n| 成功 | 2件失敗 |'
+
+test('regression: level 3 in a wide window, a table has its translation beside it, both drawn as rows, the translation faint', { options: { readingLevel: '3' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: TABLE_JA, usage: USAGE } }))
+  const ui = await $.ui.mount(reply(TABLE, 140))
+  await clock.advance(10)
+  await clock.settle()
+  const texts = (await ui.findAll({ type: 'Text' })) as any[]
+  const front = texts.findIndex(t => /Passed/.test(t.text) && t.props.dimColor !== true)
+  const behind = texts.findIndex(t => /成功/.test(t.text) && t.props.dimColor === true)
+  expect(front).toBeGreaterThanOrEqual(0)
+  expect(behind).toBeGreaterThan(front)
+  // Beside: the two are in one row, each in half of it.
+  expect((await ui.findAll({ type: 'Box', key: 'tables-beside-0' })).length).toBe(1)
+  await ui.unmount()
+})
+
+test('level 3 in a narrow window: the tables do not fit beside each other and go one under the other', { options: { readingLevel: '3' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: TABLE_JA, usage: USAGE } }))
+  const ui = await $.ui.mount(reply(TABLE, 40))
+  await clock.advance(10)
+  await clock.settle()
+  expect((await ui.findAll({ type: 'Box', key: 'tables-beside-0' })).length).toBe(0)
+  expect(await ui.find({ type: 'Text', text: /成功/ })).toBeDefined()
+  await ui.unmount()
+})

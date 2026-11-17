@@ -320,11 +320,13 @@ test('the preview of a level holds a table: closed behind its mark at level 4, i
   expect(await ui.find({ type: 'Text', text: /成功 / })).toBeUndefined()
   await ui.press({ key: 'level' })
   await $.ui.focus({ component: 'AbovePrompt', requestId: 'above-prompt', element: 'level-2', origin: { kind: 'person' } } as never)
-  // Level 2: both languages always show, the English table under the Japanese one, faint.
-  expect(await ui.find({ type: 'Markdown', text: /成功/ })).toBeDefined()
-  const behind = (await ui.findAll({ type: 'Text', text: /Passed/ })) as any[]
-  expect(behind.length).toBe(1)
-  expect(behind[0]?.props.dimColor).toBe(true)
+  // Level 2: both languages always show, the English table beside the Japanese one, faint.
+  const tables = (await ui.findAll({ type: 'Text' })) as any[]
+  const native = tables.findIndex(t => /成功/.test(t.text) && t.props.dimColor !== true)
+  const learned = tables.findIndex(t => /Passed/.test(t.text) && t.props.dimColor === true)
+  expect(native).toBeGreaterThanOrEqual(0)
+  expect(learned).toBeGreaterThan(native)
+  expect(await ui.find({ type: 'Markdown', text: /成功/ })).toBeUndefined()
   await ui.unmount()
 })
 

@@ -73,6 +73,16 @@ export function hash(text: string): string {
   return (h >>> 0).toString(36) + text.length.toString(36)
 }
 
+/**
+ * Two tables as rows to draw beside each other, each within `half` columns; null when either is not a table
+ * or is wider than that, and they go one under the other.
+ */
+export function tablesBeside(front: string, behind: string, half: number): { front: string[]; behind: string[] } | null {
+  if (!isTable(front) || !isTable(behind)) return null
+  const [a, b] = [tableLines(front, half), tableLines(behind, half)]
+  return a && b ? { front: a, behind: b } : null
+}
+
 /** Prose in the learned language, worth a translation: not code, not a rule, not already in the native language. */
 export function isProse(src: string, pair: Pair): boolean {
   if (/^\s*(```|~~~)/.test(src) || /^\s*([-*_]\s*){3,}$/.test(src)) return false

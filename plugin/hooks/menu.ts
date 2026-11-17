@@ -86,11 +86,11 @@ export function sampleIn(language: Language): Sample {
  * its top leaving the screen, so the list comes first: its rows, then a gap, the preview's title, five lines of
  * the exchange (what Claude gets may take two) and a sentence. Where one language is behind its mark the
  * sentence is the block shown open (a row more) and the table stays closed (a gap, five rows, its mark): 16.
- * Where both languages always show there are two tables, each with a gap: 20. Short of that the preview keeps
- * to two sentences. The rows were counted on a real screen.
+ * Where both languages always show, the two tables are beside each other (a gap, five rows): 15. Short of
+ * that the preview keeps to two sentences. The rows were counted on a real screen.
  */
 export function hasRoomForTable(maxRows: number, listRows: number, isBothShown: boolean): boolean {
-  return listRows + (isBothShown ? 20 : 16) <= maxRows
+  return listRows + (isBothShown ? 15 : 16) <= maxRows
 }
 
 export function samplesOf(pair: Pair): { native: Sample; target: Sample } {

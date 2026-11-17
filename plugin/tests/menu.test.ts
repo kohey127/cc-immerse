@@ -111,7 +111,7 @@ test('the preview shows the table only where the band has rows for the list firs
   // One language behind its mark: the list, then 16 rows.
   expect(hasRoomForTable(21, 5, false)).toBe(true)
   expect(hasRoomForTable(20, 5, false)).toBe(false)
-  // Both languages always shown: two tables, 20 rows.
-  expect(hasRoomForTable(27, 7, true)).toBe(true)
-  expect(hasRoomForTable(26, 7, true)).toBe(false)
+  // Both languages always shown: the two tables beside each other, 15 rows.
+  expect(hasRoomForTable(22, 7, true)).toBe(true)
+  expect(hasRoomForTable(21, 7, true)).toBe(false)
 })

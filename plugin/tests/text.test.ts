@@ -3,7 +3,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { pairOf } from '../hooks/lang'
-import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, tableLines, widthOf, wrap } from '../hooks/text'
+import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap } from '../hooks/text'
 
 const JA_EN = pairOf('Japanese', 'English')
 const ES_EN = pairOf('Spanish', 'English')
@@ -244,4 +244,23 @@ test('where the letters tell the two languages apart, the level changes nothing'
   const english = 'The build passed on the main branch.'
   expect(split(english, pair, 'native')[0]).toEqual({ src: english, isProse: true, isNative: false, isTable: false })
   expect(split('main ブランチでビルドが通りました。', pair, 'target')[0]?.isNative).toBe(true)
+})
+
+// The author, of levels 2 and 3: the word is "beside it", and the paragraphs were beside each other while
+// the tables were one under the other.
+test('regression: two tables that each fit half the window are laid out beside each other, row for row', async () => {
+  const en = '| Build | Tests |\n| --- | --- |\n| Passed | 2 failed |'
+  const ja = '| ビルド | テスト |\n| --- | --- |\n| 成功 | 2件失敗 |'
+  const both = tablesBeside(en, ja, 40)
+  expect(both?.front[1]).toContain('Build')
+  expect(both?.behind[1]).toContain('ビルド')
+  expect(both?.front.length).toBe(5)
+  expect(both?.behind.length).toBe(5)
+})
+
+test('a table wider than half the window is not put beside the other: both go one under the other', async () => {
+  const en = '| Build | Tests |\n| --- | --- |\n| Passed | 2 failed |'
+  const ja = '| ビルド | テスト |\n| --- | --- |\n| 成功 | 2件失敗 |'
+  expect(tablesBeside(en, ja, 12)).toBe(null)
+  expect(tablesBeside('Not a table.', ja, 40)).toBe(null)
 })

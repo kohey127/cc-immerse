@@ -7,7 +7,7 @@ import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
 import { isWithClaudeInTarget, levelOf, readSettings } from './settings'
 import type { Settings } from './settings'
-import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, tableLines, widthOf, wrap } from './text'
+import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap } from './text'
 import type { Chunk, Piece } from './text'
 
 const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
@@ -487,8 +487,33 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
 
       // The text read first: the chunk as written, or its translation once that is in front.
       const front = isSwapped ? (done ?? c.src) : c.src
+      // Where both languages always show, a table has the other language's table beside it, as a paragraph
+      // has, when both fit half the window; the plugin draws the two from rows of text. Wider, they go one
+      // under the other.
+      const other = !u || !isOpen ? null : isSwapped ? c.src : needsSwap ? null : done
+      const tables = isSide && c.isTable && other !== null ? tablesBeside(front, other, half) : null
       let block
-      if (!u) {
+      if (tables) {
+        block = (
+          <Box flexDirection="column">
+            {tables.front.map((line, k) => (
+              <Box flexDirection="row">
+                <Box width={2} flexShrink={0}>
+                  <Text>{k === 0 ? bullet : ' '}</Text>
+                </Box>
+                <Text>{line}</Text>
+              </Box>
+            ))}
+          </Box>
+        )
+        behind = (
+          <Box flexDirection="column">
+            {tables.behind.map(line => (
+              <Text dimColor>{line}</Text>
+            ))}
+          </Box>
+        )
+      } else if (!u) {
         block = (
           <Box flexDirection="row">
             <Box width={2} flexShrink={0}>
@@ -543,16 +568,16 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
 
       return (
         // The keyed Box is the hover area: the chunk with its gutter, what is behind it, and the cells to their right.
-        <Box key={mark && !sample ? `h${i}` : undefined} flexDirection={isBeside ? 'row' : 'column'} marginTop={i === 0 || sample ? 0 : 1}>
-          {isBeside ? (
-            <Box width={half + 2} flexShrink={0}>
+        <Box key={mark && !sample ? `h${i}` : undefined} flexDirection={isBeside || tables ? 'row' : 'column'} marginTop={i === 0 || sample ? 0 : 1}>
+          {isBeside || tables ? (
+            <Box key={tables ? `tables-beside-${i}` : undefined} width={half + 2} flexShrink={0}>
               {block}
             </Box>
           ) : (
             block
           )}
           {behind && (
-            <Box paddingLeft={2} width={isBeside ? half + 2 : undefined} flexShrink={1}>
+            <Box paddingLeft={2} width={isBeside || tables ? half + 2 : undefined} flexShrink={1}>
               {behind}
             </Box>
           )}
