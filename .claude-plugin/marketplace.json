@@ -8,7 +8,7 @@
     {
       "name": "cc-immerse",
       "source": "./plugin",
-      "description": "Learn a language while you work in Claude Code: pick how much of the conversation is in the language you are learning, and your own words always reach Claude as you wrote them."
+      "description": "Learn a language while you work in Claude Code. Read replies in the language you are learning, with your own one click away; what you type is translated or corrected as you go. 22 languages."
     }
   ],
   "metadata": {
