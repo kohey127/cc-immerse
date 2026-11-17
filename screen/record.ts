@@ -260,7 +260,8 @@ for (const words of SETS.filter(w => !onlySet || onlySet === w.name)) {
   // 3. The four levels, the same question at each: stills, so that they can be compared. The window is tall
   // enough for the whole exchange, and the picture is cut from the question to the last row of the reply.
   for (const n of wants('levels') ? ['1', '2', '3', '4'] : []) {
-    const s = await open({ cols: 110, rows: 70, options: { ...options, readingLevel: n }, script: n === '1' || n === '2' ? native : learned })
+    // Wide enough for the widest table of any set to stand beside its translation.
+    const s = await open({ cols: 124, rows: 70, options: { ...options, readingLevel: n }, script: n === '1' || n === '2' ? native : learned })
     await s.type(w.asked)
     await s.waitFor(preview)
     await s.press('Enter')
