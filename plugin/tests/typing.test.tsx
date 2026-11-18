@@ -156,3 +156,32 @@ test('regression: commentary twice over shows nothing, never the commentary', as
   expect(await ui.find({ type: 'Text', text: /↳/ })).toBeUndefined()
   await ui.unmount()
 })
+
+// Seen in the author's sessions: at level 1, in a session that had been in English, a message typed in
+// Japanese went as typed and Claude went on answering in English, which the plugin then translated, block
+// by block, into Japanese.
+test('regression: level 1, a native-language message goes as typed with a note beside it to answer in that language', { options: { readingLevel: '1' } }, async ($, on) => {
+  const { received, context, calls } = await send($, on, JAPANESE)
+  expect(received).toBe(JAPANESE)
+  expect(context).toEqual(['Reply in Japanese, the language of their message.'])
+  // The note costs no call.
+  expect(calls).toBe(0)
+})
+
+test('level 2: the same note', { options: { readingLevel: '2' } }, async ($, on) => {
+  const { received, context } = await send($, on, JAPANESE)
+  expect(received).toBe(JAPANESE)
+  expect(context).toEqual(['Reply in Japanese, the language of their message.'])
+})
+
+test('level 1, a message in the learned language: nothing is said to Claude, which answers in the language it is asked in', { options: { readingLevel: '1' } }, async ($, on) => {
+  const { received, context } = await send($, on, ENGLISH, 'OK')
+  expect(received).toBe(ENGLISH)
+  expect(context).toEqual([])
+})
+
+test('Off: nothing is said to Claude', { options: { readingLevel: 'Off' } }, async ($, on) => {
+  const { received, context } = await send($, on, JAPANESE)
+  expect(received).toBe(JAPANESE)
+  expect(context).toEqual([])
+})

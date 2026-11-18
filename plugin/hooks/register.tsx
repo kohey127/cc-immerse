@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
-import { againFixSystem, againSystem, asText, fixSystem, isFixMalformed, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, tableSystem, toTargetSystem, translateSystem } from './lang'
+import { againFixSystem, againSystem, asText, fixSystem, isFixMalformed, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, replyNote, tableSystem, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
 import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
@@ -734,8 +734,13 @@ export const register: Register = (on, options) => {
       if (settings.correct !== 'off') $.clock.after(0, () => void translate($, text, fixId(text), fixSystem(pair)))
       return next(e)
     }
-    // Shown but not sent: the preview is all there is, and the message goes as typed.
-    if (language === 'native' && settings.send !== 'target') return next(e)
+    // Sent as typed. At levels 1 and 2 the person and Claude talk in the native language, and a note beside
+    // the message says so: in a session that has been in the learned language Claude goes on answering in
+    // it, and every block of the reply would then be translated back.
+    if (language === 'native' && settings.send !== 'target') {
+      const isNativeSpoken = settings.show !== 'never' && settings.front === 'native'
+      return next(isNativeSpoken ? { ...e, context: [...(e.context ?? []), replyNote(pair.native)] } : e)
+    }
 
     // The preview already did this draft's work: Enter sends with no wait.
     const draft = (await $.state.get(DRAFT)).value
@@ -752,7 +757,7 @@ export const register: Register = (on, options) => {
     const original =
       `The user is practising ${pair.target.name}. Their message in this turn is the ${pair.target.name} version of what they typed in ${pair.native.name}. ` +
       `This is their original wording, given only so that its exact meaning is not lost:\n<original-message language="${pair.native.name}">\n${text}\n</original-message>\n` +
-      `Reply in ${pair.target.name}, the language of their message.`
+      replyNote(pair.target)
     return next({ ...e, text: prepared.target, context: [...(e.context ?? []), original] })
   })
 
