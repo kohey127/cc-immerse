@@ -122,7 +122,7 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 - **In a pair that shares an alphabet, a reply's language cannot be told by its letters.** It is taken to be in the language you and Claude talk in at your level.
 - **Pairs that share an alphabet cost one more wait.** Japanese and English are told apart by their letters, at once. Spanish and English are not, so the small model is asked which language a message is in before it is sent.
 - **A message in a third language is left alone**: sent as typed, with no translation and no correction.
-- **At levels 3 and 4 Claude is told, beside your message, to answer in the language you are learning.** Without that it answers in the language of your own words, which it can see. This is the one place the plugin says anything to Claude.
+- **Claude is told, beside your message, which language to answer in.** At levels 3 and 4 that is the language you are learning: without it Claude answers in the language of your own words, which it can see. At levels 1 and 2 it is your own language, when you type in it: without it a session that has been in the learned language goes on in that one. This is all the plugin says to Claude.
 - **Pointing and clicking need a terminal that reports the mouse.** Without it, use `/immerse open`.
 - **Paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different, and links inside them cannot be clicked.
 - Built on Claude Code's plugin API for interface mods, which is early access and may change between releases.
