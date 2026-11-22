@@ -118,6 +118,7 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 
 **Limits**
 
+- **Read aloud (off unless switched on in `/immerse`)** speaks the line in the language you are learning under each message you send. It uses [edge-tts](https://github.com/rany2/edge-tts) (`pip install edge-tts`), which sends that line to Microsoft's speech service; without it, a system voice of that language reads it. macOS only.
 - **Terminal only.** In tests, the phone and desktop apps showed nothing. The reason is not known yet.
 - **In a pair that shares an alphabet, a reply's language cannot be told by its letters.** It is taken to be in the language you and Claude talk in at your level.
 - **Pairs that share an alphabet cost one more wait.** Japanese and English are told apart by their letters, at once. Spanish and English are not, so the small model is asked which language a message is in before it is sent.
