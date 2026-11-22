@@ -1,6 +1,6 @@
 {
   "name": "cc-immerse",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Learn a language while you work in Claude Code. Read replies in the language you are learning, with your own one click away; what you type is translated or corrected as you go. 22 languages.",
   "types": "./types/index.d.ts",
   "license": "MIT",
@@ -87,6 +87,12 @@
       "title": "Immerse · Help while typing",
       "description": "A line above the prompt box as you type: your draft in the language you are learning, or as it would read corrected. And a correction under what you sent in the language you are learning.",
       "default": true
+    },
+    "readAloud": {
+      "type": "boolean",
+      "title": "Immerse · Read aloud",
+      "description": "Read aloud the line in the language you are learning under each message you send, with edge-tts (sends that line to Microsoft's speech service) or, without it, the system voice. macOS.",
+      "default": false
     }
   }
 }

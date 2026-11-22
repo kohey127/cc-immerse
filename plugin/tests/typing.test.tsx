@@ -220,3 +220,114 @@ test('help while typing off: nothing is shown under the message and nothing is a
   expect(await ui.find({ type: 'Text', text: /EN ▸/ })).toBeUndefined()
   await ui.unmount()
 })
+
+// Read aloud: the learned-language line under a sent message is spoken with edge-tts and afplay, as the
+// author's syntax project reads its sentences.
+
+/** Sends `text` with read aloud as set, and keeps every command run. `edgeTts`: whether edge-tts is there. */
+async function sendAloud($: any, on: any, text: string, answer: string, edgeTts = true) {
+  const clock = mock.clock(on)
+  const runs: string[][] = []
+  const spoken: string[] = []
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: answer, usage: USAGE } }))
+  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  on('process.run', ((_: unknown, e: { argv: readonly string[] }) => {
+    runs.push([...e.argv])
+    if (e.argv[0] === 'edge-tts' && !edgeTts) throw new Error('spawn edge-tts ENOENT')
+    const stdout = e.argv[0] === 'say' ? 'Kyoko               ja_JP    # こんにちは\nSamantha            en_US    # Hello! My name is Samantha.' : ''
+    return { value: { exitCode: 0, stdout, stderr: '' } }
+  }) as any)
+  // The sound plays as a child of its own, so that switching read aloud off, which loads the plugin again,
+  // stops it where it is.
+  on('process.spawn', (async function* (_: unknown, e: { argv: readonly string[] }) {
+    runs.push(['spawn', ...e.argv])
+    return { value: { code: 0, signal: null } }
+  }) as any)
+  on('audio.speak', ((_: unknown, e: { text: string; voice?: string }) => {
+    spoken.push(`${e.voice ?? '(default)'}: ${e.text}`)
+    return { value: { synthesizer: 'say' } }
+  }) as any)
+  await $.prompt.submit({ text })
+  await clock.advance(10)
+  await clock.settle()
+  await clock.advance(10)
+  await clock.settle()
+  return { runs, spoken }
+}
+
+test('level 4, read aloud on: the English that was sent is read in an English voice, then played', { options: { readAloud: true } }, async ($, on) => {
+  const { runs } = await sendAloud($, on, JAPANESE, 'Is there a cooler name for this?')
+  const tts = runs.find(r => r[0] === 'edge-tts') ?? []
+  expect(tts).toContain('en-US-AriaNeural')
+  expect(tts).toContain('Is there a cooler name for this?')
+  const file = tts[tts.indexOf('--write-media') + 1]
+  expect(runs.some(r => r[0] === 'spawn' && r[1] === 'afplay' && r[2] === file)).toBe(true)
+})
+
+test('level 2, read aloud on: the English shown under the message is read', { options: { readingLevel: '2', readAloud: true } }, async ($, on) => {
+  const { runs } = await sendAloud($, on, JAPANESE, 'Is there a cooler name for this?')
+  expect(runs.find(r => r[0] === 'edge-tts')).toContain('Is there a cooler name for this?')
+})
+
+test('an English message with a correction: the corrected sentence is read', { options: { readAloud: true } }, async ($, on) => {
+  const { runs } = await sendAloud($, on, ENGLISH, 'I want to test the correction feature with this sentence.\n---\n- want to のあとは原形')
+  expect(runs.find(r => r[0] === 'edge-tts')).toContain('I want to test the correction feature with this sentence.')
+})
+
+test('read aloud off, as with nothing set: no command is run', async ($, on) => {
+  const { runs, spoken } = await sendAloud($, on, JAPANESE, 'Is there a cooler name for this?')
+  expect(runs).toEqual([])
+  expect(spoken).toEqual([])
+})
+
+test('without edge-tts a system voice of the learned language reads it', { options: { readAloud: true } }, async ($, on) => {
+  const { spoken } = await sendAloud($, on, JAPANESE, 'Is there a cooler name for this?', false)
+  expect(spoken).toEqual(['Samantha: Is there a cooler name for this?'])
+})
+
+// Seen in the author's link-life session with read aloud on: a background task's notification came in as a
+// prompt, the plugin took it for a message typed in Japanese, and read its English aloud at length. At levels
+// 3 and 4 it would have sent the notification to Claude in English in place of what it said.
+const NOTIFICATION = '<task-notification>\n<task-id>a591f05f9dfd2df75</task-id>\n<summary>記事の下書きを書き終えました。読者役のテストも通っています。</summary>\n</task-notification>'
+
+test('regression: a background task\'s notification is left alone: sent as it came, nothing said beside it, nothing read aloud', { options: { readAloud: true } }, async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  const runs: string[][] = []
+  let received: { text?: string; context?: readonly string[] } = {}
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: 'I finished the draft.', usage: USAGE } }
+  })
+  on('prompt.submit', (_: unknown, e: { text: string; context?: readonly string[] }) => {
+    received = e
+    return { text: e.text }
+  })
+  on('process.run', ((_: unknown, e: { argv: readonly string[] }) => {
+    runs.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  }) as any)
+  for (const kind of ['task-notification', 'peer-send-message', 'scheduled-trigger']) {
+    await ($ as any).prompt.submit({ text: NOTIFICATION, origin: { kind } })
+    await clock.advance(10)
+    await clock.settle()
+    expect(received.text).toBe(NOTIFICATION)
+    expect(received.context ?? []).toEqual([])
+  }
+  expect(calls).toBe(0)
+  expect(runs).toEqual([])
+})
+
+test('a message from the person by Remote Control is theirs, as one typed at the terminal is', async ($, on) => {
+  const clock = mock.clock(on)
+  let received = ''
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: 'Is there a cooler name for this?', usage: USAGE } }))
+  on('prompt.submit', (_: unknown, e: { text: string }) => {
+    received = e.text
+    return { text: e.text }
+  })
+  await ($ as any).prompt.submit({ text: JAPANESE, origin: { kind: 'bridge' } })
+  await clock.advance(10)
+  await clock.settle()
+  expect(received).toBe('Is there a cooler name for this?')
+})

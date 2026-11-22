@@ -30,6 +30,8 @@ export type Settings = {
   previewDelayMs: number
   /** When a message typed in the learned language is corrected: while typing and after sending, after sending, or not at all. */
   correct: 'both' | 'sent' | 'off'
+  /** Whether the learned-language line under a sent message is read aloud. */
+  readAloud: boolean
 }
 
 type Options = Readonly<Record<string, unknown>>
@@ -62,5 +64,6 @@ export function readSettings(options: Options): Settings {
     hasPreview: hasHelp,
     previewDelayMs: 600,
     correct: hasHelp ? 'both' : 'off',
+    readAloud: options.readAloud === true,
   }
 }

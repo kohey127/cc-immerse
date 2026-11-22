@@ -38,21 +38,22 @@ test('before /immerse the band holds nothing of the settings', async ($, on) => 
   await ui.unmount()
 })
 
-test('/immerse lists the four settings above the prompt, a row each, its value beside its name', async ($, on) => {
+test('/immerse lists the five settings above the prompt, a row each, its value beside its name', async ($, on) => {
   const { immerse } = world(on)
   await immerse($, '')
   const ui = await $.ui.mount(BAND)
   const rows = await labels(ui)
-  expect(rows.length).toBe(5)
+  expect(rows.length).toBe(6)
   expect(rows[0]).toContain('Close')
   expect(rows[1]).toContain('Your language')
   expect(rows[3]).toContain('Level')
   expect(rows[3]).toContain('Level 4 · With Claude in English')
   expect(rows[4]).toContain('Help while typing')
+  expect(rows[5]).toContain('Read aloud')
   // The keyboard's row is marked, and the preview is of that row.
   expect(rows[3]?.includes('❯')).toBe(true)
   expect(await ui.find({ type: 'Text', text: /^Preview · Level/ })).toBeDefined()
-  expect((await ui.findAll({ type: 'Button' })).map((b: any) => b.props.hotkey)).toEqual(['0', '1', '2', '3', '4'])
+  expect((await ui.findAll({ type: 'Button' })).map((b: any) => b.props.hotkey)).toEqual(['0', '1', '2', '3', '4', '5'])
   await ui.unmount()
 })
 
@@ -90,7 +91,7 @@ test('Enter on Level shows its choices in place, the one in force marked; a pick
   expect(choices[5]).toContain('● Level 4')
   await ui.press({ key: 'level-2' })
   expect(seen.set).toEqual([{ key: 'cc-immerse.readingLevel', value: '2' }])
-  expect((await labels(ui)).length).toBe(5)
+  expect((await labels(ui)).length).toBe(6)
   await ui.unmount()
 })
 
@@ -100,7 +101,7 @@ test('Help while typing flips where it is', async ($, on) => {
   const ui = await $.ui.mount(BAND)
   await ui.press({ key: 'typingHelp' })
   expect(seen.set).toEqual([{ key: 'cc-immerse.typingHelp', value: false }])
-  expect((await labels(ui)).length).toBe(5)
+  expect((await labels(ui)).length).toBe(6)
   await ui.unmount()
 })
 
@@ -229,7 +230,7 @@ test('the rows wrap: Up from the first is the last', async ($, on) => {
   await press($, 'up')
   await press($, 'up')
   await press($, 'up')
-  expect(await cursorRow(ui)).toContain('Help while typing')
+  expect(await cursorRow(ui)).toContain('Read aloud')
   await ui.unmount()
 })
 
@@ -245,7 +246,7 @@ test('Enter shows the row’s choices; Enter on one writes it and sends nothing'
   expect(await cursorRow(ui)).toContain('Level 2')
   await press($, 'return')
   expect(seen.set).toEqual([{ key: 'cc-immerse.readingLevel', value: '2' }])
-  expect((await labels(ui)).length).toBe(5)
+  expect((await labels(ui)).length).toBe(6)
   await ui.unmount()
 })
 
@@ -254,7 +255,7 @@ test('Left goes back from a row’s choices, and from the list it closes it and 
   const ui = await start($)
   await press($, 'right')
   await press($, 'left')
-  expect((await labels(ui)).length).toBe(5)
+  expect((await labels(ui)).length).toBe(6)
   expect(await cursorRow(ui)).toContain('Level')
   await press($, 'left')
   expect((await labels(ui)).length).toBe(0)

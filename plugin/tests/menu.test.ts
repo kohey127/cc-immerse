@@ -21,6 +21,7 @@ test('four rows, each with what is set now; the level says in which language you
     ['You are learning', 'English'],
     ['Level', 'Level 4 · With Claude in English'],
     ['Help while typing', 'On'],
+    ['Read aloud', 'Off'],
   ])
   expect(row(rows({ readingLevel: '2' }), 'level').shown).toBe('Level 2 · With Claude in Japanese')
   expect(row(rows({ readingLevel: 'Off' }), 'level').shown).toBe('Off')
@@ -114,4 +115,15 @@ test('the preview shows the table only where the band has rows for the list firs
   // Both languages always shown: the two tables beside each other, 15 rows.
   expect(hasRoomForTable(22, 7, true)).toBe(true)
   expect(hasRoomForTable(21, 7, true)).toBe(false)
+})
+
+test('read aloud is a switch: Off with nothing set, Enter turns it On', async () => {
+  const aloud = row(rows(), 'readAloud')
+  expect(aloud.isSwitch).toBe(true)
+  expect(aloud.choices.map(c => [c.label, c.set])).toEqual([
+    ['On', { readAloud: true }],
+    ['Off', { readAloud: false }],
+  ])
+  expect(aloud.shown).toBe('Off')
+  expect(row(rows({ readAloud: true }), 'readAloud').shown).toBe('On')
 })

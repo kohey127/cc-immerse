@@ -18,7 +18,13 @@ test('with nothing set: level 4, the learned language with Claude and on the scr
     hasPreview: true,
     previewDelayMs: 600,
     correct: 'both',
+    readAloud: false,
   })
+})
+
+test('read aloud is off unless switched on', async () => {
+  expect(readSettings({}).readAloud).toBe(false)
+  expect(readSettings({ readAloud: true }).readAloud).toBe(true)
 })
 
 test('levels 1 and 2: with Claude in the native language; what is typed in it is sent as typed', async () => {

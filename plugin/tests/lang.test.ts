@@ -2,7 +2,7 @@
 // small model is asked. Written before hooks/lang.ts existed.
 import { expect, test } from 'claude-code/testing'
 
-import { againFixSystem, againSystem, classify, fixSystem, isFixMalformed, isMistranslated, isTargetText, judgeSystem, languageByName, pairOf, readFix, readJudgement, toTargetSystem, translateSystem } from '../hooks/lang'
+import { againFixSystem, againSystem, classify, spokenText, systemVoiceOf, voiceOf, fixSystem, isFixMalformed, isMistranslated, isTargetText, judgeSystem, LANGUAGES, languageByName, pairOf, readFix, readJudgement, toTargetSystem, translateSystem } from '../hooks/lang'
 
 const JA_EN = pairOf('Japanese', 'English')
 const KO_EN = pairOf('Korean', 'English')
@@ -210,4 +210,50 @@ test('regression: a translation with a paragraph in another language among its o
   expect(isMistranslated('変更点\n\n両方の言語が常に表示される場合、表は左右に並びます。', pair)).toBe(false)
   // A short line in Latin letters between them (a command, a name) is not a paragraph of prose.
   expect(isMistranslated('次のコマンドを実行します。\n\nbun test\n\nすべて通れば完了です。', pair)).toBe(false)
+})
+
+test('every language has a voice of its own to be read in', async () => {
+  const voices = LANGUAGES.map(voiceOf)
+  expect(new Set(voices).size).toBe(22)
+  for (const voice of voices) expect(voice.endsWith('Neural')).toBe(true)
+  expect(voiceOf(languageByName('English') as never)).toBe('en-US-AriaNeural')
+  expect(voiceOf(languageByName('Spanish') as never)).toBe('es-ES-ElviraNeural')
+})
+
+test('what is read aloud is the text without its Markdown marks', async () => {
+  expect(spokenText('Run **`bun test`** and see the [notes](notes.md).')).toBe('Run bun test and see the notes.')
+})
+
+// What `say -v '?'` lists on a Mac with English as its first language: novelty voices among the real ones.
+const LISTING = [
+  "Albert              en_US    # Hello! My name is Albert.",
+  "Bubbles             en_US    # Hello! My name is Bubbles.",
+  "Daniel              en_GB    # Hello! My name is Daniel.",
+  "Eddy (English (US)) en_US    # Hello! My name is Eddy.",
+  "Kyoko               ja_JP    # こんにちは! 私の名前はKyokoです。",
+  "Paulina             es_MX    # ¡Hola! Me llamo Paulina.",
+  "Samantha (English (US)) en_US    # Hello! My name is Samantha.",
+  "Eddy (Chinese (Taiwan)) zh_TW    # 你好，我叫Eddy。",
+].join('\n')
+
+test('without edge-tts, the system voice is one of the learned language, a natural one first', async () => {
+  const at = (name: string) => systemVoiceOf(languageByName(name) as never, LISTING)
+  expect(at('English')).toBe('Samantha (English (US))')
+  expect(at('Japanese')).toBe('Kyoko')
+  expect(at('Spanish')).toBe('Paulina')
+  // Traditional Chinese is read in a Taiwanese voice, and a language with no voice installed has none.
+  expect(at('Chinese (Traditional)')).toBe('Eddy (Chinese (Taiwan))')
+  expect(at('Korean')).toBeUndefined()
+  // A novelty voice is never chosen.
+  expect(systemVoiceOf(languageByName('English') as never, LISTING.split('\n').slice(0, 2).join('\n'))).toBeUndefined()
+})
+
+// A line long enough to read for minutes was the other half of read aloud that did not stop.
+test('what is read aloud is cut to its first sentences, a few hundred characters at most', async () => {
+  const sentence = 'The launch date cannot wait, because the print order has to be placed by Friday. '
+  const long = sentence.repeat(20)
+  const read = spokenText(long)
+  expect(read.length <= 400).toBe(true)
+  expect(read.endsWith('Friday.')).toBe(true)
+  expect(spokenText('Short.')).toBe('Short.')
 })

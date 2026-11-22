@@ -164,5 +164,19 @@ export function settingsRows(options: Options, pair: Pair, samples: { native: Sa
       ],
       options.typingHelp === false ? 1 : 0,
     ),
+    rowOf(
+      'readAloud',
+      'Read aloud',
+      [
+        {
+          label: 'On',
+          about: `The ${t} line under what you sent is read aloud`,
+          set: { readAloud: true },
+          preview: lines(`❯ ${native.asked}`, [`  ↳ ${target.asked}`], `🔊 "${target.asked}" is read aloud in a ${t} voice.`, ['With edge-tts, the line goes to Microsoft\'s speech service; without it, the system voice reads it. macOS.']),
+        },
+        { label: 'Off', about: 'Nothing is read aloud', set: { readAloud: false }, preview: lines(`❯ ${native.asked}`, [`  ↳ ${target.asked}`], ['Nothing is read aloud.']) },
+      ],
+      options.readAloud === true ? 0 : 1,
+    ),
   ]
 }

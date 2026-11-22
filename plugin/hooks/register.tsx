@@ -1,7 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Draft, Tr } from '../types'
-import { againFixSystem, againSystem, asText, fixSystem, isFixMalformed, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, replyNote, tableSystem, toTargetSystem, translateSystem } from './lang'
+import { againFixSystem, againSystem, asText, fixSystem, isFixMalformed, isMistranslated, judgeSystem, pairOf, readFix, readJudgement, replyNote, spokenText, systemVoiceOf, tableSystem, voiceOf, toTargetSystem, translateSystem } from './lang'
 import type { Pair } from './lang'
 import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
@@ -78,6 +78,59 @@ function fixHead(answer: string): string | null {
   return fix.kind === 'ok' ? `✓ Your ${pair.target.name} is perfect!` : fix.corrected
 }
 
+// Read aloud. One line at a time, in the order sent: a line waits for the one before it to end.
+let speaking: Promise<void> = Promise.resolve()
+let isEdgeTtsMissing = false
+/** What `say -v '?'` lists, read once. */
+let systemVoices: string | null = null
+
+/** Reads `text` with a system voice of the learned language, or the system's default where none is installed. */
+async function speakWithSystem($: EngineInterface, text: string): Promise<void> {
+  if (systemVoices === null) systemVoices = await $.process.run(['say', '-v', '?']).then(r => r.stdout, () => '')
+  const voice = systemVoiceOf(pair.target, systemVoices)
+  await $.audio.speak(text, voice ? { voice } : undefined).catch(() => $.audio.speak(text).catch(() => undefined))
+}
+
+/**
+ * Reads a line aloud in the learned language's voice: edge-tts makes the sound and afplay plays it, as the
+ * author's syntax project reads its sentences. Without edge-tts the system voice reads it. Nothing happens
+ * with read aloud off.
+ */
+function speak($: EngineInterface, line: string): void {
+  if (!settings.readAloud) return
+  const text = spokenText(line)
+  if (text === '') return
+  speaking = speaking.then(async () => {
+    const file = `/tmp/cc-immerse-${hash(text)}-${Date.now()}.mp3`
+    try {
+      if (isEdgeTtsMissing) throw new Error('edge-tts is not installed')
+      const made = await $.process.run(['edge-tts', '--voice', voiceOf(pair.target), '--text', text, '--write-media', file], { timeoutMs: 30_000 })
+      if (made.exitCode !== 0) throw new Error(made.stderr.slice(0, 80))
+      // Played as a child of its own: switching read aloud off loads the plugin again, which ends the child
+      // and so the sound where it is.
+      for await (const _ of $.process.spawn({ argv: ['afplay', file] })) {
+        // afplay writes nothing; the loop lasts as long as the sound.
+      }
+      await $.process.run(['rm', '-f', file])
+    } catch (err) {
+      if (!isEdgeTtsMissing && /ENOENT|not found|not installed/i.test(String(err))) {
+        isEdgeTtsMissing = true
+        $.ui.toast('immerse: read aloud uses edge-tts (pip install edge-tts); the system voice reads for now')
+      }
+      await speakWithSystem($, text)
+    }
+  })
+}
+
+/** Reads aloud the corrected sentence of a message typed in the learned language, once its correction is in. */
+async function speakFix($: EngineInterface, text: string): Promise<void> {
+  if (!settings.readAloud) return
+  const fix = (await $.state.get({ ...TR, id: fixId(text) })).value
+  if (fix?.status !== 'done') return
+  const read = readFix(fix.text)
+  if (read.kind === 'fixed') speak($, read.corrected)
+}
+
 /** One short call to the small model: its answer, or '' when it gave none. */
 async function ask($: EngineInterface, system: string, prompt: string): Promise<string> {
   try {
@@ -142,8 +195,9 @@ async function apply($: EngineInterface, values: Values): Promise<void> {
 }
 
 /** What `/immerse off` switches off, and so what `/immerse on` brings back. */
-const OFF: Values = { readingLevel: 'Off', typingHelp: false }
-const ON: Values = { readingLevel: '4', typingHelp: true }
+const OFF: Values = { readingLevel: 'Off', typingHelp: false, readAloud: false }
+// Read aloud comes back only where /immerse off turned it off: it is off with nothing set.
+const ON: Values = { readingLevel: '4', typingHelp: true, readAloud: false }
 
 /** `/immerse off`: all help off, what was set kept for `/immerse on`. */
 async function switchOff($: EngineInterface): Promise<void> {
@@ -165,7 +219,8 @@ async function switchOn($: EngineInterface): Promise<void> {
     const now = field === 'readingLevel' ? levelOf(stored) : stored[field]
     if (now !== OFF[field]) continue
     const was = before[field]
-    values[field] = (typeof was === 'string' || typeof was === 'boolean') && was !== OFF[field] ? was : (ON[field] as string | boolean)
+    const back = (typeof was === 'string' || typeof was === 'boolean') && was !== OFF[field] ? was : (ON[field] as string | boolean)
+    if (back !== now) values[field] = back
   }
   await apply($, values)
 }
@@ -712,6 +767,10 @@ export const register: Register = (on, options) => {
   on('prompt.submit', async ($, e, next) => {
     const text = e.text
     if (e.command || e.isMeta || !(await isOn($))) return next(e)
+    // Only what the person wrote is the plugin's: typed at the terminal, or sent by Remote Control. A
+    // background task's notification, another session's message or a scheduled prompt also arrives here,
+    // and was once taken for a message in the native language, sent in English and read aloud at length.
+    if (e.origin && e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') return next(e)
     // Enter on the list's own line: the row under the keyboard is changed, and nothing is sent.
     if (isHint(text)) {
       if (!isMenuOpen) return { drop: '' }
@@ -732,7 +791,11 @@ export const register: Register = (on, options) => {
     const language = languageOf(text, pair)
     if (language === 'other') return next(e)
     if (language === 'learning') {
-      if (settings.correct !== 'off') $.clock.after(0, () => void translate($, text, fixId(text), fixSystem(pair)))
+      if (settings.correct !== 'off')
+        $.clock.after(0, async () => {
+          await translate($, text, fixId(text), fixSystem(pair))
+          await speakFix($, text)
+        })
       return next(e)
     }
     // Sent as typed. At levels 1 and 2 the person and Claude talk in the native language, and a note beside
@@ -744,11 +807,15 @@ export const register: Register = (on, options) => {
       if (settings.send === 'preview') {
         const draft = (await $.state.get(DRAFT)).value
         const id = hash(text.trim())
-        if (draft?.status === 'done' && draft.src === text && draft.label === pair.target.tag) await $.state.set({ ...SHOWN, id }, draft.english)
-        else
+        if (draft?.status === 'done' && draft.src === text && draft.label === pair.target.tag) {
+          await $.state.set({ ...SHOWN, id }, draft.english)
+          speak($, draft.english)
+        } else
           $.clock.after(0, async () => {
             const english = await ask($, toTargetSystem(pair), text)
-            if (english !== '') await $.state.set({ ...SHOWN, id }, english)
+            if (english === '') return
+            await $.state.set({ ...SHOWN, id }, english)
+            speak($, english)
           })
       }
       const isNativeSpoken = settings.show !== 'never' && settings.front === 'native'
@@ -764,6 +831,7 @@ export const register: Register = (on, options) => {
       return next(e)
     }
     await $.state.set({ ...SENT, id: hash(prepared.target) }, text)
+    speak($, prepared.target)
     // The person's own words go with the message, beside it and not shown: Claude reads the learned-language
     // version as the message and answers in that language, and has the original for what a translation loses.
     // The last sentence is needed: with the original in view and nothing said, it answers in the original's language.
