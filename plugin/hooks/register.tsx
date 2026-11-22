@@ -13,6 +13,7 @@ import type { Chunk, Piece } from './text'
 const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
 const TR = { plugin: 'cc-immerse', key: 'tr' } as const
 const SENT = { plugin: 'cc-immerse', key: 'sent' } as const
+const SHOWN = { plugin: 'cc-immerse', key: 'shown' } as const
 const DRAFT = { plugin: 'cc-immerse', key: 'draft' } as const
 const LATEST = { plugin: 'cc-immerse', key: 'latest' } as const
 const MENU = { plugin: 'cc-immerse', key: 'menu' } as const
@@ -738,6 +739,18 @@ export const register: Register = (on, options) => {
     // the message says so: in a session that has been in the learned language Claude goes on answering in
     // it, and every block of the reply would then be translated back.
     if (language === 'native' && settings.send !== 'target') {
+      // With help while typing on, the learned-language version is shown under the message once sent, as it
+      // was above the prompt box while typing: the preview's, or made now. Shown only, never sent.
+      if (settings.send === 'preview') {
+        const draft = (await $.state.get(DRAFT)).value
+        const id = hash(text.trim())
+        if (draft?.status === 'done' && draft.src === text && draft.label === pair.target.tag) await $.state.set({ ...SHOWN, id }, draft.english)
+        else
+          $.clock.after(0, async () => {
+            const english = await ask($, toTargetSystem(pair), text)
+            if (english !== '') await $.state.set({ ...SHOWN, id }, english)
+          })
+      }
       const isNativeSpoken = settings.show !== 'never' && settings.front === 'native'
       return next(isNativeSpoken ? { ...e, context: [...(e.context ?? []), replyNote(pair.native)] } : e)
     }
@@ -989,6 +1002,24 @@ export const register: Register = (on, options) => {
             <Text dimColor>↳ </Text>
             <Box flexShrink={1}>
               <Text dimColor>{text.trim()}</Text>
+            </Box>
+          </Box>
+        </Box>
+      )
+    }
+
+    // Sent as typed in the native language: its learned-language version under it, marked as the line above
+    // the prompt box marks it, so that it does not read as what was sent.
+    const shown = (await $.state.get({ ...SHOWN, id: hash(text.trim()) })).value
+    if (shown) {
+      const row = await next(e)
+      return (
+        <Box flexDirection="column">
+          {row}
+          <Box flexDirection="row" paddingLeft={2}>
+            <Text dimColor>↳ </Text>
+            <Box flexShrink={1}>
+              <Text dimColor>{`${pair.target.tag} ▸ ${shown}`}</Text>
             </Box>
           </Box>
         </Box>

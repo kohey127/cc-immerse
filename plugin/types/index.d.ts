@@ -19,6 +19,8 @@ declare module 'claude-code' {
       tr: StateFamily<Tr | null>
       /** What the person typed, by a hash of the English that was sent in its place. */
       sent: StateFamily<string | null>
+      /** The learned-language version of a message sent as typed, shown under it and never sent; by a hash of the message. */
+      shown: StateFamily<string | null>
       /** The live preview above the prompt box; null when the draft needs none. */
       draft: Draft | null
       /** The latest reply, for `/immerse open`: each message of it with its text. Kept here, not in the module, because a setting written loads the module again. */

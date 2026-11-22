@@ -164,8 +164,8 @@ test('regression: level 1, a native-language message goes as typed with a note b
   const { received, context, calls } = await send($, on, JAPANESE)
   expect(received).toBe(JAPANESE)
   expect(context).toEqual(['Reply in Japanese, the language of their message.'])
-  // The note costs no call.
-  expect(calls).toBe(0)
+  // One call, for the English shown under the message (no preview was made of this draft); the note costs none.
+  expect(calls).toBe(1)
 })
 
 test('level 2: the same note', { options: { readingLevel: '2' } }, async ($, on) => {
@@ -184,4 +184,39 @@ test('Off: nothing is said to Claude', { options: { readingLevel: 'Off' } }, asy
   const { received, context } = await send($, on, JAPANESE)
   expect(received).toBe(JAPANESE)
   expect(context).toEqual([])
+})
+
+// The author, at level 2: "why does the English not show after sending?" While typing it shows above the
+// prompt box, and it was gone once the message was sent.
+test('regression: level 2, a native-language message sent as typed has its English under it, marked as only shown', { options: { readingLevel: '2' } }, async ($, on) => {
+  const { received } = await send($, on, JAPANESE)
+  expect(received).toBe(JAPANESE)
+  const ui = await $.ui.mount(typedMessage(JAPANESE))
+  expect(await ui.find({ type: 'Text', text: 'EN ▸ Is there a cooler name for this?' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the English the preview already made is shown under the message, with no further call', { options: { readingLevel: '1' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: 'Is there a cooler name for this?', usage: USAGE } }
+  })
+  on('prompt.submit', (_: unknown, e: { text: string }) => ({ text: e.text }))
+  // The preview has done this draft: its English is in the draft's state.
+  const draft = { src: JAPANESE, english: 'Is there a cooler name for this?', status: 'done', label: 'EN', sends: false }
+  on('state.get', ((_: unknown, e: { key: string }) => ({ value: { value: e.key === 'draft' ? draft : undefined, version: e.key === 'draft' ? 1 : 0 } })) as any)
+  await ($ as any).prompt.submit({ text: JAPANESE })
+  await clock.advance(10)
+  await clock.settle()
+  expect(calls).toBe(0)
+})
+
+test('help while typing off: nothing is shown under the message and nothing is asked', { options: { readingLevel: '2', typingHelp: false } }, async ($, on) => {
+  const { calls } = await send($, on, JAPANESE)
+  expect(calls).toBe(0)
+  const ui = await $.ui.mount(typedMessage(JAPANESE))
+  expect(await ui.find({ type: 'Text', text: /EN ▸/ })).toBeUndefined()
+  await ui.unmount()
 })

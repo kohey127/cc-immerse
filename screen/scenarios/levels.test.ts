@@ -83,6 +83,8 @@ test('level 2: with Claude in Japanese. Two columns, Japanese on the left, its E
     expect(sent(s).hasOriginal).toBe(false)
     await s.waitFor('The build passed')
     await s.waitFor('The unit tests took')
+    // The author asked why the English was gone once sent: it stays under the message, marked as only shown.
+    await s.waitFor(`↳ EN ▸ ${TYPED_EN}`)
     const screen = await s.screen()
     const row = await s.rowOf('main ブランチ')
     expect(row).toBe(await s.rowOf('The build passed'))
