@@ -14,10 +14,10 @@ const reply = (text: string, requestId = 'm1') =>
     viewport: { columns: 80, rows: 40 },
   }) as const
 
-test('each English block has one mark, and a Japanese block has none', async $ => {
+test('in an English reply each block has one mark, a Japanese block among them too: it stays as written, its English behind the mark', async $ => {
   const ui = await $.ui.mount(reply('The first paragraph.\n\nこれは日本語の段落です。\n\nThe third paragraph.'))
   const marks = (await ui.findAll({ type: 'Button' })).filter(b => b.props.label === '▸')
-  expect(marks.map(b => b.key)).toEqual(['g0', 'g2'])
+  expect(marks.map(b => b.key)).toEqual(['g0', 'g1', 'g2'])
   await ui.unmount()
 })
 

@@ -238,3 +238,44 @@ test('level 3 in a narrow window: the tables do not fit beside each other and go
   expect(await ui.find({ type: 'Text', text: /成功/ })).toBeDefined()
   await ui.unmount()
 })
+
+// Seen in the author's link-career session at level 1: Claude answered in Japanese and quoted an English draft
+// the author had asked for; the plugin swapped the English for a Japanese translation, so the draft could not
+// be read. A block in the other language inside a reply in the language read first is part of what was said.
+const QUOTED = '推敲案です。\n\n> Next, I want to focus on one product, and help its users do things they could not do before.\n\nこの案でよければ置き換えます。'
+const QUOTE_JA = '> 次は1つのプロダクトに集中して、使う人がそれまでできなかったことをできるようにしたいです。'
+
+test('regression: level 1, an English quote in a Japanese reply stays English; its Japanese is behind the mark', { options: { readingLevel: '1' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: QUOTE_JA, usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply(QUOTED))
+  await clock.advance(10)
+  await clock.settle()
+  // Nothing is translated until the mark is pressed: the reply is in the language read first.
+  expect(calls).toBe(0)
+  const quote = await ui.find({ type: 'Text', text: /focus on one product/ })
+  expect(quote).toBeDefined()
+  expect(Boolean(quote?.props.dimColor)).toBe(false)
+  expect(await ui.find({ type: 'Text', text: /1つのプロダクト/ })).toBeUndefined()
+  expect(((await ui.findAll({ type: 'Button' })) as any[]).some(b => b.props.label === '▸')).toBe(true)
+  await ui.unmount()
+})
+
+test('level 4, a Japanese quote in an English reply stays Japanese; its English is behind the mark', { options: { readingLevel: '4' } }, async ($, on) => {
+  const clock = mock.clock(on)
+  let calls = 0
+  on('model.complete', () => {
+    calls++
+    return { value: { isAnswered: true as const, text: 'The build passed on the main branch.', usage: USAGE } }
+  })
+  const ui = await $.ui.mount(reply('Here is what you wrote, word for word.\n\n> main ブランチでビルドが通りました。\n\nThe wording reads naturally; I would keep it as it is.'))
+  await clock.advance(10)
+  await clock.settle()
+  expect(calls).toBe(0)
+  expect(Boolean((await ui.find({ type: 'Text', text: /main ブランチ/ }))?.props.dimColor)).toBe(false)
+  await ui.unmount()
+})

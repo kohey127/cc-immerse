@@ -157,6 +157,32 @@ export function isProse(src: string, pair: Pair): boolean {
   return isTargetText(src, pair)
 }
 
+/** Whether a block is a quote: every line of it starts with `>`. What someone said, kept as they said it. */
+export function isQuote(src: string): boolean {
+  const lines = src.split('\n').filter(line => line.trim() !== '')
+  return lines.length > 0 && lines.every(line => /^\s*>/.test(line))
+}
+
+/**
+ * Whether a reply is mostly in the language not read first, by the width of its blocks in each language (a
+ * wide character counts two, so that Japanese and English weigh alike), quotes left out. Such a reply is read
+ * with its blocks swapped for their translations. A reply mostly in the language read first keeps every
+ * block as written: a block in the other language there is a draft or an example, part of what was said,
+ * and its translation waits behind the mark.
+ */
+export function isMostlyOther(chunks: readonly Chunk[], isNativeFront: boolean): boolean {
+  let other = 0
+  let front = 0
+  for (const c of chunks) {
+    if (isQuote(c.src)) continue
+    const isOther = isNativeFront ? c.isProse : Boolean(c.isNative)
+    const isFront = isNativeFront ? Boolean(c.isNative) : c.isProse
+    if (isOther) other += widthOf(c.src)
+    else if (isFront) front += widthOf(c.src)
+  }
+  return other > front
+}
+
 /**
  * Blocks separated by blank lines; a fenced block stays whole, a heading joins the block after it.
  * `spoken`: the language the person and Claude talk in at the level. Two languages that share their letters

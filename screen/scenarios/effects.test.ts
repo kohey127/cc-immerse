@@ -105,7 +105,7 @@ test('Your language · Korean: the translation is asked for in Korean, and the b
   }, script)
 })
 
-test('You are learning · Japanese, with English your own, level 4: a Japanese reply is read as it is, and an English one is put into Japanese', async () => {
+test('You are learning · Japanese, with English your own, level 4: a Japanese reply is read as it is, an English block in it too, each with the other language behind its mark', async () => {
   const EN = 'The build passed.'
   // All Japanese: a Japanese sentence holding an English word ("main ブランチ…") is not taken for Japanese today, see lang.ts.
   const JA = 'ビルドが通りました。テストも全部通っています。'
@@ -113,11 +113,13 @@ test('You are learning · Japanese, with English your own, level 4: a Japanese r
   const script: Script = { replies: [`${JA}\n\n${FIRST}`], pair: pairOf('English', 'Japanese'), small: { translate: { [JA]: EN }, translateBack: { [FIRST]: JA_OF_FIRST }, toTarget: { [ASKED]: 'ビルドの状態は？' } } }
   await withOptions({ nativeLanguage: 'English', targetLanguage: 'Japanese' }, async s => {
     await s.ask(ASKED)
-    // The English block is not the language read first at level 4, so its Japanese takes its place.
+    // The reply is mostly Japanese, the language read first: its English block is part of what was said and
+    // stays as written (it was once swapped for its Japanese, and a draft asked for in English was lost).
+    await s.waitFor(FIRST)
+    expect(await s.rowOf(JA_OF_FIRST)).toBe(-1)
+    await s.click(await s.rowOf(FIRST), 0)
     await s.waitFor(JA_OF_FIRST)
-    expect(await s.rowOf(FIRST)).toBe(-1)
-    const row = await s.rowOf(JA)
-    await s.click(row, 0)
+    await s.click(await s.rowOf(JA), 0)
     await s.waitFor(EN)
     expect(s.model.unscripted).toEqual([])
   }, script)

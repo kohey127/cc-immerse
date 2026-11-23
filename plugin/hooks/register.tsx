@@ -7,7 +7,7 @@ import { hasRoomForTable, samplesOf, settingsRows } from './menu'
 import type { Preview, Row, Values } from './menu'
 import { isWithClaudeInTarget, levelOf, readSettings } from './settings'
 import type { Settings } from './settings'
-import { fixKey, hash, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap, wrappedTableLines } from './text'
+import { fixKey, hash, isMostlyOther, isQuote, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap, wrappedTableLines } from './text'
 import type { Chunk, Piece } from './text'
 
 const OPEN = { plugin: 'cc-immerse', key: 'open' } as const
@@ -444,6 +444,9 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
   // Which language is read first. A chunk in the other one changes places with its translation: the translation
   // is drawn as the reply and the reply's own text is what shows beside it, below it or behind the mark.
   const isNativeFront = settings.front === 'native'
+  // Blocks change places with their translations only in a reply mostly in the other language, and a quote
+  // never does: it is what someone said, in the words they said it.
+  const isReplyOther = isMostlyOther(chunks, isNativeFront)
   const behindTag = isNativeFront ? pair.target.tag : pair.native.tag
 
   type Laid = { lead: string; pieces: Piece[]; isHeading: boolean }
@@ -509,7 +512,7 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
       const isOpen = u ? isAlways || (sample ? (sample.open[i] ?? false) : ((await $.state.get({ ...OPEN, id: rowId })).value ?? false)) : false
       // A chunk in the language that is not read first changes places with its translation, which is then
       // the text read and so wanted at once: an English reply at level 1, a Japanese one at level 4.
-      const needsSwap = Boolean(u) && u?.isToNative === isNativeFront
+      const needsSwap = Boolean(u) && u?.isToNative === isNativeFront && isReplyOther && !isQuote(c.src)
       const isWanted = Boolean(u) && (isOpen || needsSwap)
       const tr: Tr | null = !u || !isWanted ? null : sample ? { status: 'done', text: sample.translations[i] ?? '' } : ((await $.state.get({ ...TR, id: trId(u.text, u.isToNative) })).value ?? null)
       // Shown with no press: the translation is asked for as the chunk is drawn. Once asked, the state holds

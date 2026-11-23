@@ -3,7 +3,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import { pairOf } from '../hooks/lang'
-import { isFixable, isProse, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap, wrappedTableLines } from '../hooks/text'
+import { isFixable, isMostlyOther, isProse, isQuote, isTable, languageOf, linesOf, piecesOf, split, tableLines, tablesBeside, widthOf, wrap, wrappedTableLines } from '../hooks/text'
 
 const JA_EN = pairOf('Japanese', 'English')
 const ES_EN = pairOf('Spanish', 'English')
@@ -291,4 +291,15 @@ test('a cell\'s Markdown marks are drawn out of a wrapped table, and a table tha
   // Too narrow for even four columns a cell, and a text with no table: null.
   expect(wrappedTableLines('| A | B | C | D |\n| --- | --- | --- | --- |\n| 1 | 2 | 3 | 4 |', 12)).toBeNull()
   expect(wrappedTableLines('Only a sentence.', 80)).toBeNull()
+})
+
+test('a quote is a block of lines that all start with >; a reply is judged by its other blocks, wide characters counting two', async () => {
+  const pair = pairOf('Japanese', 'English')
+  expect(isQuote('> Next, I want to focus on one product.\n> And help its users.')).toBe(true)
+  expect(isQuote('A paragraph that quotes > once.')).toBe(false)
+  const reply = split('推敲案です。\n\n> Next, I want to focus on one product, and help its users do things they could not do before.\n\nこの案でよければ置き換えます。', pair)
+  // At level 1 (Japanese read first) this reply is Japanese: the quote does not count.
+  expect(isMostlyOther(reply, true)).toBe(false)
+  expect(isMostlyOther(split('The build passed.\n\nビルドが通りました。', pair), true)).toBe(false)
+  expect(isMostlyOther(split('The build passed on the main branch, and every check ran.\n\n通りました。', pair), true)).toBe(true)
 })

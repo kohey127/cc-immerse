@@ -50,12 +50,12 @@ test('the translation is asked for in the native language of the setting', { opt
 })
 
 test(
-  'the pair the other way round: Japanese blocks get the mark, English ones do not',
+  'the pair the other way round: in a Japanese reply every block gets the mark, the English one among them too',
   { options: { nativeLanguage: 'English', targetLanguage: 'Japanese' } },
   async $ => {
     const ui = await $.ui.mount(reply('これは最初の段落です。\n\nThis paragraph is in English.\n\nこれは三番目の段落です。'))
     const marks = (await ui.findAll({ type: 'Button' })).filter(b => b.props.label === '▸')
-    expect(marks.map(b => b.key)).toEqual(['g0', 'g2'])
+    expect(marks.map(b => b.key)).toEqual(['g0', 'g1', 'g2'])
     await ui.unmount()
   },
 )
