@@ -55,6 +55,8 @@ export type Session = {
   click(row: number, col: number): Promise<void>
   /** Turns the wheel down (or up, for a negative count) with the pointer at a 0-based row and column. */
   wheel(row: number, col: number, lines: number): Promise<void>
+  /** The text of every run of cells that is a hyperlink (OSC 8) to `uri`, as the terminal holds it. */
+  linked(uri: string): Promise<string[]>
   /** Saves a picture of the screen as `out/<name>.png` and returns its path. */
   shot(name: string): Promise<string>
   close(): Promise<void>
@@ -142,6 +144,9 @@ export async function open(opts: Options): Promise<Session> {
       await session.move(row, col)
       await t.mouse.scroll(lines < 0 ? 'up' : 'down', { amount: Math.abs(lines) })
       await Bun.sleep(200)
+    },
+    async linked(uri) {
+      return (await t.getByLink(uri).any().locations()).map(run => run.text)
     },
     async shot(name) {
       await settle()
