@@ -430,7 +430,7 @@ type View = {
 
 /** Draws a reply as the settings say. The settings preview draws its sample with it, so the sample is what a reply will be. */
 async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']['resolve']>[0], view: View) {
-  const { Box, Button, Markdown, Text } = $.ui.resolve(e)
+  const { Box, Button, Link, Markdown, Text } = $.ui.resolve(e)
   const { chunks, columns, settings, pair, sample } = view
   // `isAlways`: every translation shows with no press, so there is no mark and nothing to open or close.
   const isAlways = settings.show !== 'request'
@@ -474,6 +474,13 @@ async function drawReply($: EngineInterface, e: Parameters<EngineInterface['ui']
         : row.pieces.map(piece =>
             piece.kind === 'plain' && !row.isHeading ? (
               piece.text
+            ) : piece.kind === 'link' && piece.href ? (
+              // A link opens where it goes: drawn by the terminal as one (OSC 8), underlined as the reply's are.
+              <Link href={piece.href}>
+                <Text underline italic={isBehind && isSlanted}>
+                  {piece.text}
+                </Text>
+              </Link>
             ) : (
               <Text
                 bold={row.isHeading || piece.kind === 'bold'}

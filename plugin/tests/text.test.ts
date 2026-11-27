@@ -303,3 +303,24 @@ test('a quote is a block of lines that all start with >; a reply is judged by it
   expect(isMostlyOther(split('The build passed.\n\nビルドが通りました。', pair), true)).toBe(false)
   expect(isMostlyOther(split('The build passed on the main branch, and every check ran.\n\n通りました。', pair), true)).toBe(true)
 })
+
+// The author: "Sources and the like cannot be clicked at all." A link in a paragraph the plugin draws kept
+// its words and lost where it went.
+test('regression: a link keeps where it goes, and so does a bare URL', async () => {
+  expect(piecesOf('See [Built In: Envisio](https://builtin.com/company/envisio) and https://pitchbook.com/x.')).toEqual([
+    { text: 'See ', kind: 'plain' },
+    { text: 'Built In: Envisio', kind: 'link', href: 'https://builtin.com/company/envisio' },
+    { text: ' and ', kind: 'plain' },
+    { text: 'https://pitchbook.com/x', kind: 'link', href: 'https://pitchbook.com/x' },
+    { text: '.', kind: 'plain' },
+  ])
+})
+
+test('a link cut over two rows keeps where it goes on both, and two links side by side stay two', async () => {
+  const rows = wrap(piecesOf('Read [the long article about the company](https://a.example/1) first.'), 20)
+  const links = rows.flat().filter(p => p.kind === 'link')
+  expect(links.length).toBeGreaterThan(1)
+  for (const link of links) expect(link.href).toBe('https://a.example/1')
+  const two = wrap(piecesOf('[One](https://a.example/1)[Two](https://a.example/2)'), 40).flat()
+  expect(two.map(p => p.href)).toEqual(['https://a.example/1', 'https://a.example/2'])
+})

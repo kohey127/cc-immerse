@@ -161,9 +161,18 @@ export function isTargetText(text: string, pair: Pair): boolean {
  */
 export function isMistranslated(translation: string, into: Pair): boolean {
   if (isLatin(into.native) === isLatin(into.target)) return false
-  // The translation should read as the language asked for, which is this pair's native one.
-  const asked: Pair = { native: into.target, target: into.native }
-  return translation.split(/\n\s*\n/).some(paragraph => paragraph.replace(/[^\p{L}]/gu, '').length >= 12 && !isTargetText(paragraph, asked))
+  // Where a link goes is not what it says: an address is Latin letters in any language.
+  const said = translation.replace(/\]\([^)]*\)/g, ']').replace(/https?:\/\/\S+/g, '')
+  return said.split(/\n\s*\n/).some(paragraph => {
+    if (paragraph.replace(/[^\p{L}]/gu, '').length < 12) return false
+    const { nativeOnly, targetOnly } = tally(paragraph, into)
+    // Asked for a language of its own letters: a paragraph with almost none of them is in another language.
+    // Names, products and commands stay in Latin letters in a right translation, so a few of the asked
+    // language's letters among many Latin ones are enough.
+    if (!isLatin(into.native)) return nativeOnly < 2
+    // Asked for a language in Latin letters: a paragraph mostly in the other's own letters is not it.
+    return targetOnly >= Math.max(2, nativeOnly / 3)
+  })
 }
 
 /** An instruction given a second time, after an answer in the wrong language. */

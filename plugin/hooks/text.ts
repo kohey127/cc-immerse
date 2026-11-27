@@ -303,19 +303,21 @@ export function linesOf(src: string): Line[] {
   return out
 }
 
-/** A line's inline Markdown as pieces: plain text, **bold**, *italic*, `code`, and a link's text. */
-export type Piece = { text: string; kind: 'plain' | 'bold' | 'italic' | 'code' | 'link' }
+/** A line's inline Markdown as pieces: plain text, **bold**, *italic*, `code`, and a link's text with where it goes. */
+export type Piece = { text: string; kind: 'plain' | 'bold' | 'italic' | 'code' | 'link'; href?: string }
 
 export function piecesOf(text: string): Piece[] {
   const out: Piece[] = []
-  const marks = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\s][^*]*)\*|\[([^\]]+)\]\([^)]*\)/g
+  // A Markdown link, or a bare URL: its last character is not a sentence's closing mark.
+  const marks = /\*\*([^*]+)\*\*|`([^`]+)`|\*([^*\s][^*]*)\*|\[([^\]]+)\]\(([^)\s]*)\)|(https?:\/\/[^\s<>()]*[^\s<>().,;:!?'"、。）])/g
   let from = 0
   for (let m = marks.exec(text); m; m = marks.exec(text)) {
     if (m.index > from) out.push({ text: text.slice(from, m.index), kind: 'plain' })
     if (m[1] !== undefined) out.push({ text: m[1], kind: 'bold' })
     else if (m[2] !== undefined) out.push({ text: m[2], kind: 'code' })
     else if (m[3] !== undefined) out.push({ text: m[3], kind: 'italic' })
-    else out.push({ text: m[4] ?? '', kind: 'link' })
+    else if (m[4] !== undefined) out.push({ text: m[4], kind: 'link', href: m[5] ?? '' })
+    else out.push({ text: m[6] ?? '', kind: 'link', href: m[6] ?? '' })
     from = m.index + m[0].length
   }
   if (from < text.length) out.push({ text: text.slice(from), kind: 'plain' })
@@ -396,8 +398,8 @@ export function wrap(pieces: readonly Piece[], max: number): Piece[][] {
         }
         if (isSpace && used === 0) continue
         const last = row[row.length - 1]
-        if (last && last.kind === piece.kind) last.text += isSpace ? ' ' : token
-        else row.push({ text: isSpace ? ' ' : token, kind: piece.kind })
+        if (last && last.kind === piece.kind && last.href === piece.href) last.text += isSpace ? ' ' : token
+        else row.push(piece.href === undefined ? { text: isSpace ? ' ' : token, kind: piece.kind } : { text: isSpace ? ' ' : token, kind: piece.kind, href: piece.href })
         used += isSpace ? 1 : w
       }
     }

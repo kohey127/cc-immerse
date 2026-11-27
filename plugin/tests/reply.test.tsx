@@ -149,3 +149,16 @@ test('regression: a wide table opens to a translation in grey rows the plugin dr
   expect(await ui.find({ type: 'Markdown', text: /通過/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('regression: a link in a drawn paragraph is a link that opens where it goes, the translation\'s too', async ($, on) => {
+  const clock = mock.clock(on)
+  on('model.complete', () => ({ value: { isAnswered: true as const, text: '出典: [Built In: Envisio](https://builtin.com/company/envisio)', usage: USAGE } }))
+  const ui = await $.ui.mount(reply('Source: [Built In: Envisio](https://builtin.com/company/envisio), and the notes.'))
+  const front = (await ui.findAll({ type: 'Link' })) as any[]
+  expect(front.map(l => l.props.href)).toEqual(['https://builtin.com/company/envisio'])
+  await ui.press({ key: 'g0' })
+  await clock.advance(10)
+  await clock.settle()
+  expect(((await ui.findAll({ type: 'Link' })) as any[]).length).toBe(2)
+  await ui.unmount()
+})

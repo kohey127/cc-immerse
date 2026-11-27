@@ -257,3 +257,11 @@ test('what is read aloud is cut to its first sentences, a few hundred characters
   expect(read.endsWith('Friday.')).toBe(true)
   expect(spokenText('Short.')).toBe('Short.')
 })
+
+// Found with the test for links: a Japanese translation holding a link's address was judged not Japanese,
+// since the address is all Latin letters, and was not shown.
+test('regression: a link\'s address and a bare URL do not count in judging a translation\'s language', async () => {
+  const pair = pairOf('Japanese', 'English')
+  expect(isMistranslated('出典: [Built In: Envisio](https://builtin.com/company/envisio/jobs/engineering-team-overview)', pair)).toBe(false)
+  expect(isMistranslated('詳しくは https://builtin.com/company/envisio/jobs/engineering-team-overview を見てください。', pair)).toBe(false)
+})
