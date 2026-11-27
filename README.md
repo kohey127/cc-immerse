@@ -125,7 +125,7 @@ Translations and corrections run on Claude Haiku through your own Claude Code ac
 - **A message in a third language is left alone**: sent as typed, with no translation and no correction.
 - **Claude is told, beside your message, which language to answer in.** At levels 3 and 4 that is the language you are learning: without it Claude answers in the language of your own words, which it can see. At levels 1 and 2 it is your own language, when you type in it: without it a session that has been in the learned language goes on in that one. This is all the plugin says to Claude.
 - **Pointing and clicking need a terminal that reports the mouse.** Without it, use `/immerse open`.
-- **Paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different, and links inside them cannot be clicked.
+- **Paragraphs are drawn by the plugin**, not by Claude Code, so bold, italics and inline code may look slightly different; their links can be clicked, as Claude Code's can.
 - Built on Claude Code's plugin API for interface mods, which is early access and may change between releases.
 
 </details>

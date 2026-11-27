@@ -59,6 +59,7 @@ They write pictures and recordings to `screen/out/` (not in git). Look at the pi
 The API for interface mods is early access (built on Claude Code 2.1.325). Its types are in `plugin/.claude-plugin/types/` once the plugin has loaded; grep them, do not guess.
 
 - `$` may be passed only to top-level functions.
+- A link in text the plugin draws is a `Link` element inside the `Text` (an OSC 8 hyperlink). A terminal Claude Code does not know to draw hyperlinks in, such as the screen checks' one, gets the address written after the words, as Claude Code writes its own links there.
 - A render hook cannot write state. It can schedule work with `$.clock.after(0, …)`.
 - A press hook has a 10 second budget: never await a model call in it; schedule it.
 - A `Button` under the pointer is always drawn inverted and is one row with no wrapping. Text the reader reads is therefore plain `Text`, wrapped by `text.ts` to the viewport's columns.
